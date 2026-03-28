@@ -1,0 +1,21 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+appsettings.Development.json
+
+# Node / Vue
+node_modules/
+dist/
+.env
+.env.local
+
+# Capacitor
+android/
+ios/
+
+# Misc
+*.DS_Store
+Thumbs.db
