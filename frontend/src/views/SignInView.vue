@@ -48,10 +48,8 @@ function handleGoogleSignIn() {
 
       <div class="left-content">
         <div class="brand animate-fade-down">
-          <span class="brand-icon">🌹</span>
-          <div>
-            <div class="brand-name">RoseGuard</div>
-            <div class="brand-sub">Monitor</div>
+          <div class="brand-logo-wrap">
+            <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="brand-logo-img" />
           </div>
         </div>
 
@@ -232,32 +230,28 @@ function handleGoogleSignIn() {
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 
-.brand-icon {
-  font-size: 32px;
+.brand-logo-wrap {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 10px 16px;
+  display: inline-flex;
   animation: heartbeat 2.5s ease-in-out infinite;
 }
 
 @keyframes heartbeat {
   0%, 100% { transform: scale(1); }
-  14% { transform: scale(1.15); }
-  28% { transform: scale(1); }
-  42% { transform: scale(1.1); }
-  56% { transform: scale(1); }
+  14%       { transform: scale(1.04); }
+  28%       { transform: scale(1); }
+  42%       { transform: scale(1.03); }
+  56%       { transform: scale(1); }
 }
 
-.brand-name {
-  font-size: 18px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.brand-sub {
-  font-size: 12px;
-  color: var(--color-sidebar-text);
-  letter-spacing: 0.5px;
+.brand-logo-img {
+  width: 180px;
+  height: auto;
+  display: block;
 }
 
 .left-hero h2 {

@@ -15,10 +15,8 @@ const navItems = [
 <template>
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <span class="logo-icon">🌹</span>
-      <div class="logo-text">
-        <span class="logo-name">RoseGuard</span>
-        <span class="logo-sub">Monitor</span>
+      <div class="logo-img-wrap">
+        <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="logo-img" />
       </div>
     </div>
 
@@ -60,8 +58,8 @@ const navItems = [
 .sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 24px 20px;
+  justify-content: center;
+  padding: 20px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   animation: fade-down 0.4s ease 0.2s both;
 }
@@ -71,37 +69,28 @@ const navItems = [
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.logo-icon {
-  font-size: 26px;
-  line-height: 1;
+.logo-img-wrap {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   animation: heartbeat 2.5s ease-in-out infinite;
 }
 
 @keyframes heartbeat {
   0%, 100% { transform: scale(1); }
-  14%       { transform: scale(1.15); }
+  14%       { transform: scale(1.04); }
   28%       { transform: scale(1); }
-  42%       { transform: scale(1.1); }
+  42%       { transform: scale(1.03); }
   56%       { transform: scale(1); }
 }
 
-.logo-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-
-.logo-name {
-  font-size: 15px;
-  font-weight: 700;
-  color: #ffffff;
-  letter-spacing: -0.2px;
-}
-
-.logo-sub {
-  font-size: 11px;
-  color: var(--color-sidebar-text);
-  letter-spacing: 0.5px;
+.logo-img {
+  width: 148px;
+  height: auto;
+  display: block;
 }
 
 .sidebar-nav {
