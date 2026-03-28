@@ -1,5 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { generateHistoryPdf } from '@/services/pdfGenerator'
+import { useReportsStore } from '@/stores/reports'
+import { useUserStore } from '@/stores/user'
+
+const reportsStore = useReportsStore()
+const userStore = useUserStore()
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface Reading {
@@ -141,6 +147,42 @@ const periods: { value: Period; label: string }[] = [
   { value: '7days',  label: '7 Days'  },
   { value: '30days', label: '30 Days' },
 ]
+
+const downloadingPdf = ref(false)
+
+const periodLabel = computed(() => ({
+  today:  'Today',
+  '7days':  'Last 7 Days',
+  '30days': 'Last 30 Days',
+}[period.value]))
+
+async function downloadPdf() {
+  downloadingPdf.value = true
+  await new Promise(r => setTimeout(r, 200))
+
+  const now = new Date()
+  const { doc, sizeKb } = generateHistoryPdf({
+    period: periodLabel.value,
+    userName: userStore.fullName,
+    readings: readings.value,
+    spo2Stats: spo2Stats.value,
+    hrStats: hrStats.value,
+    tempStats: tempStats.value,
+  })
+
+  const fileName = `RoseGuard_History_${period.value}_${now.toISOString().slice(0, 10)}.pdf`
+  doc.save(fileName)
+
+  reportsStore.addReport({
+    id: crypto.randomUUID(),
+    title: `History Report · ${periodLabel.value} — ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    generatedAt: now.toISOString(),
+    sizeKb,
+    pdfDataUrl: doc.output('datauristring'),
+  })
+
+  downloadingPdf.value = false
+}
 </script>
 
 <template>
@@ -152,7 +194,8 @@ const periods: { value: Period; label: string }[] = [
         <h1>History</h1>
         <p>Historical biometric readings and trends over time</p>
       </div>
-      <div class="period-tabs">
+      <div class="header-right">
+        <div class="period-tabs">
         <button
           v-for="p in periods"
           :key="p.value"
@@ -161,6 +204,11 @@ const periods: { value: Period; label: string }[] = [
           @click="period = p.value"
         >
           {{ p.label }}
+        </button>
+      </div>
+        <button class="pdf-btn" :disabled="downloadingPdf" @click="downloadPdf">
+          <i :class="downloadingPdf ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
+          {{ downloadingPdf ? 'Generating…' : 'Download PDF' }}
         </button>
       </div>
     </div>
@@ -301,6 +349,40 @@ const periods: { value: Period; label: string }[] = [
   align-items: flex-start;
   margin-bottom: 24px;
 }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.pdf-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.pdf-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+  box-shadow: 0 4px 14px rgba(233, 30, 140, 0.35);
+  transform: translateY(-1px);
+}
+
+.pdf-btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+
+.pdf-btn:disabled { opacity: 0.75; cursor: not-allowed; }
 
 .period-tabs {
   display: flex;
