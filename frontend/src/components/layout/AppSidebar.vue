@@ -15,9 +15,7 @@ const navItems = [
 <template>
   <aside class="sidebar">
     <div class="sidebar-logo">
-      <div class="logo-img-wrap">
-        <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="logo-img" />
-      </div>
+      <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="logo-img" />
     </div>
 
     <nav class="sidebar-nav">
@@ -69,14 +67,15 @@ const navItems = [
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.logo-img-wrap {
-  background: #ffffff;
-  border-radius: 12px;
-  padding: 6px 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.logo-img {
+  width: 148px;
+  height: auto;
+  display: block;
   animation: heartbeat 2.5s ease-in-out infinite;
+  filter:
+    drop-shadow(0 0 4px rgba(233, 30, 140, 1))
+    drop-shadow(0 0 10px rgba(233, 30, 140, 0.75))
+    drop-shadow(0 0 22px rgba(233, 30, 140, 0.45));
 }
 
 @keyframes heartbeat {
@@ -85,12 +84,6 @@ const navItems = [
   28%       { transform: scale(1); }
   42%       { transform: scale(1.03); }
   56%       { transform: scale(1); }
-}
-
-.logo-img {
-  width: 148px;
-  height: auto;
-  display: block;
 }
 
 .sidebar-nav {
