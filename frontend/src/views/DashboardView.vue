@@ -2,13 +2,20 @@
 import { ref, computed } from 'vue'
 import LiveReadingCard from '@/components/LiveReadingCard.vue'
 import KpiCard from '@/components/KpiCard.vue'
+import { generateDashboardPdf } from '@/services/pdfGenerator'
+import { useReportsStore } from '@/stores/reports'
+import { useUserStore } from '@/stores/user'
 import type { KpiItem } from '@/types'
+
+const reportsStore = useReportsStore()
+const userStore = useUserStore()
 
 // --- Mock live readings (will be replaced by SignalR) ---
 const spo2 = ref(98)
 const heartRate = ref(72)
 const temperature = ref(36.6)
 const lastUpdated = ref(new Date().toLocaleTimeString())
+const downloadingPdf = ref(false)
 
 // --- Mock KPIs (will be replaced by backend) ---
 const kpis: KpiItem[] = [
@@ -21,6 +28,33 @@ const kpis: KpiItem[] = [
   { id: 'trend', label: '7-Day Trend', value: '+2.1', unit: '%', status: 'normal', icon: 'pi pi-chart-line', description: 'Overall health score change' },
   { id: 'rhr', label: 'Resting Heart Rate', value: '68', unit: 'BPM', status: 'normal', icon: 'pi pi-heart-fill', description: 'Average over last 24 hours' },
 ]
+
+async function downloadPdf() {
+  downloadingPdf.value = true
+  await new Promise(r => setTimeout(r, 200)) // let spinner render
+
+  const now = new Date()
+  const { doc, sizeKb } = generateDashboardPdf({
+    spo2: spo2.value,
+    heartRate: heartRate.value,
+    temperature: temperature.value,
+    kpis,
+    userName: userStore.fullName,
+  })
+
+  const fileName = `RoseGuard_Report_${now.toISOString().slice(0, 10)}.pdf`
+  doc.save(fileName)
+
+  reportsStore.addReport({
+    id: crypto.randomUUID(),
+    title: `Dashboard Report — ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    generatedAt: now.toISOString(),
+    sizeKb,
+    pdfDataUrl: doc.output('datauristring'),
+  })
+
+  downloadingPdf.value = false
+}
 
 // --- Chart data (mock last 24 readings) ---
 const mockTimestamps = Array.from({ length: 20 }, (_, i) => {
@@ -114,8 +148,14 @@ const formattedDate = computed(() =>
   <div class="page">
     <!-- Header -->
     <div class="page-header animate-section" style="--s-delay: 0s">
-      <h1>Dashboard</h1>
-      <p>{{ formattedDate }} &nbsp;·&nbsp; Last updated {{ lastUpdated }}</p>
+      <div>
+        <h1>Dashboard</h1>
+        <p>{{ formattedDate }} &nbsp;·&nbsp; Last updated {{ lastUpdated }}</p>
+      </div>
+      <button class="pdf-btn" :disabled="downloadingPdf" @click="downloadPdf">
+        <i :class="downloadingPdf ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
+        {{ downloadingPdf ? 'Generating…' : 'Download PDF' }}
+      </button>
     </div>
 
     <!-- Live Readings -->
@@ -172,6 +212,45 @@ const formattedDate = computed(() =>
 </template>
 
 <style scoped>
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.pdf-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.pdf-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark);
+  box-shadow: 0 4px 14px rgba(233, 30, 140, 0.35);
+  transform: translateY(-1px);
+}
+
+.pdf-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+.pdf-btn:disabled {
+  opacity: 0.75;
+  cursor: not-allowed;
+}
+
 /* Entrance animation */
 .animate-section {
   animation: fade-up 0.45s ease var(--s-delay, 0s) both;
