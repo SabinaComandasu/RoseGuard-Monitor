@@ -1,19 +1,27 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { RouterView, useRoute } from 'vue-router'
 import AppSidebar from './components/layout/AppSidebar.vue'
+
+const route = useRoute()
 </script>
 
 <template>
-  <AppSidebar />
-  <div class="app-main">
-    <header class="app-header">
-      <div class="connection-status">
-        <span class="status-dot" />
-        <span>Bluetooth Connected</span>
-      </div>
-    </header>
-    <RouterView />
-  </div>
+  <!-- Public pages (sign in, etc.) render without the shell -->
+  <RouterView v-if="route.meta.public" />
+
+  <!-- Authenticated shell -->
+  <template v-else>
+    <AppSidebar />
+    <div class="app-main">
+      <header class="app-header">
+        <div class="connection-status">
+          <span class="status-dot" />
+          <span>Bluetooth Connected</span>
+        </div>
+      </header>
+      <RouterView />
+    </div>
+  </template>
 </template>
 
 <style scoped>
