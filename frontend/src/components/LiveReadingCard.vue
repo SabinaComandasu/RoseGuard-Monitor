@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { ref, onMounted, watch } from 'vue'
 import type { HealthStatus } from '@/types'
 
 const props = defineProps<{
@@ -17,11 +18,39 @@ const statusLabel: Record<HealthStatus, string> = {
   unknown: 'No Data',
 }
 
-const statusDot: Record<HealthStatus, string> = {
-  normal: '●',
-  warning: '●',
-  critical: '●',
-  unknown: '●',
+// Count-up animation
+const displayValue = ref<number>(0)
+
+function animateTo(target: number) {
+  if (target === null) return
+  const isDecimal = !Number.isInteger(target)
+  const duration = 900
+  const start = performance.now()
+  const from = displayValue.value
+
+  function step(now: number) {
+    const elapsed = now - start
+    const progress = Math.min(elapsed / duration, 1)
+    const eased = 1 - Math.pow(1 - progress, 3)
+    const current = from + (target - from) * eased
+    displayValue.value = isDecimal ? Math.round(current * 10) / 10 : Math.round(current)
+    if (progress < 1) requestAnimationFrame(step)
+  }
+
+  requestAnimationFrame(step)
+}
+
+onMounted(() => {
+  if (props.value !== null) animateTo(props.value)
+})
+
+watch(() => props.value, (val) => {
+  if (val !== null) animateTo(val)
+})
+
+function formatDisplay(val: number, target: number | null) {
+  if (target === null) return '—'
+  return Number.isInteger(target) ? val.toString() : val.toFixed(1)
 }
 </script>
 
@@ -29,17 +58,19 @@ const statusDot: Record<HealthStatus, string> = {
   <div class="reading-card card" :class="status">
     <div class="card-top">
       <span class="card-label">{{ label }}</span>
-      <span class="card-icon"><i :class="icon" /></span>
+      <span class="card-icon">
+        <i :class="icon" />
+      </span>
     </div>
 
     <div class="card-value-row">
-      <span class="card-value">{{ value ?? '—' }}</span>
+      <span class="card-value">{{ formatDisplay(displayValue, value) }}</span>
       <span class="card-unit">{{ value !== null ? unit : '' }}</span>
     </div>
 
     <div class="card-footer">
       <span class="status-badge" :class="status">
-        {{ statusDot[status] }} {{ statusLabel[status] }}
+        ● {{ statusLabel[status] }}
       </span>
       <span v-if="trend !== null && trend !== undefined" class="trend" :class="trend >= 0 ? 'up' : 'down'">
         {{ trend >= 0 ? '↑' : '↓' }} {{ Math.abs(trend) }}{{ unit }}
@@ -55,7 +86,13 @@ const statusDot: Record<HealthStatus, string> = {
   flex-direction: column;
   gap: 12px;
   border-top: 3px solid var(--color-border);
-  transition: all 0.2s ease;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  cursor: default;
+}
+
+.reading-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .reading-card.normal { border-top-color: var(--color-normal); }
@@ -87,6 +124,13 @@ const statusDot: Record<HealthStatus, string> = {
   justify-content: center;
   color: var(--color-primary);
   font-size: 15px;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.reading-card:hover .card-icon {
+  transform: scale(1.12) rotate(-6deg);
+  background: var(--color-primary);
+  color: #fff;
 }
 
 .card-value-row {
@@ -101,6 +145,8 @@ const statusDot: Record<HealthStatus, string> = {
   color: var(--color-text-primary);
   letter-spacing: -2px;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
 }
 
 .card-unit {

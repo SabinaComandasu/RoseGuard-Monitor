@@ -113,58 +113,48 @@ const formattedDate = computed(() =>
 <template>
   <div class="page">
     <!-- Header -->
-    <div class="page-header">
+    <div class="page-header animate-section" style="--s-delay: 0s">
       <h1>Dashboard</h1>
       <p>{{ formattedDate }} &nbsp;·&nbsp; Last updated {{ lastUpdated }}</p>
     </div>
 
     <!-- Live Readings -->
-    <p class="section-title">Live Readings</p>
+    <p class="section-title animate-section" style="--s-delay: 0.05s">Live Readings</p>
     <div class="readings-grid">
-      <LiveReadingCard
-        label="SpO2"
-        :value="spo2"
-        unit="%"
-        status="normal"
-        icon="pi pi-eye"
-        :trend="0"
-      />
-      <LiveReadingCard
-        label="Heart Rate"
-        :value="heartRate"
-        unit="BPM"
-        status="normal"
-        icon="pi pi-heart"
-        :trend="2"
-      />
-      <LiveReadingCard
-        label="Temperature"
-        :value="temperature"
-        unit="°C"
-        status="normal"
-        icon="pi pi-sun"
-        :trend="-0.1"
-      />
+      <div class="reading-wrap" style="--s-delay: 0.1s">
+        <LiveReadingCard label="SpO2" :value="spo2" unit="%" status="normal" icon="pi pi-eye" :trend="0" />
+      </div>
+      <div class="reading-wrap" style="--s-delay: 0.18s">
+        <LiveReadingCard label="Heart Rate" :value="heartRate" unit="BPM" status="normal" icon="pi pi-heart" :trend="2" />
+      </div>
+      <div class="reading-wrap" style="--s-delay: 0.26s">
+        <LiveReadingCard label="Temperature" :value="temperature" unit="°C" status="normal" icon="pi pi-sun" :trend="-0.1" />
+      </div>
     </div>
 
     <!-- Health KPIs -->
-    <p class="section-title" style="margin-top: 32px;">Health KPIs</p>
+    <p class="section-title animate-section" style="margin-top: 32px; --s-delay: 0.32s">Health KPIs</p>
     <div class="kpi-grid">
-      <KpiCard
-        v-for="kpi in kpis"
+      <div
+        v-for="(kpi, i) in kpis"
         :key="kpi.id"
-        :label="kpi.label"
-        :value="kpi.value"
-        :unit="kpi.unit"
-        :status="kpi.status"
-        :icon="kpi.icon"
-        :description="kpi.description"
-      />
+        class="kpi-wrap"
+        :style="{ '--s-delay': `${0.36 + i * 0.06}s` }"
+      >
+        <KpiCard
+          :label="kpi.label"
+          :value="kpi.value"
+          :unit="kpi.unit"
+          :status="kpi.status"
+          :icon="kpi.icon"
+          :description="kpi.description"
+        />
+      </div>
     </div>
 
     <!-- Trend Chart -->
-    <p class="section-title" style="margin-top: 32px;">24-Hour Trend</p>
-    <div class="chart-card card">
+    <p class="section-title animate-section" style="margin-top: 32px; --s-delay: 0.85s">24-Hour Trend</p>
+    <div class="chart-card card animate-section" style="--s-delay: 0.9s">
       <div class="chart-header">
         <div>
           <span class="chart-title">Biometric Overview</span>
@@ -182,6 +172,24 @@ const formattedDate = computed(() =>
 </template>
 
 <style scoped>
+/* Entrance animation */
+.animate-section {
+  animation: fade-up 0.45s ease var(--s-delay, 0s) both;
+}
+
+.reading-wrap {
+  animation: fade-up 0.45s ease var(--s-delay, 0s) both;
+}
+
+.kpi-wrap {
+  animation: fade-up 0.4s ease var(--s-delay, 0s) both;
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 .readings-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

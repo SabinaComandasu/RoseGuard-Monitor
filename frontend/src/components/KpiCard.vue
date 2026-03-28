@@ -43,6 +43,13 @@ const statusLabel: Record<HealthStatus, string> = {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: default;
+}
+
+.kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover);
 }
 
 .kpi-top {
@@ -59,11 +66,16 @@ const statusLabel: Record<HealthStatus, string> = {
   align-items: center;
   justify-content: center;
   font-size: 16px;
+  transition: transform 0.2s ease;
 }
 
-.kpi-icon-wrap.normal { background: var(--color-normal-bg); color: var(--color-normal); }
+.kpi-card:hover .kpi-icon-wrap {
+  transform: scale(1.15) rotate(-8deg);
+}
+
+.kpi-icon-wrap.normal  { background: var(--color-normal-bg);  color: var(--color-normal); }
 .kpi-icon-wrap.warning { background: var(--color-warning-bg); color: var(--color-warning); }
-.kpi-icon-wrap.critical { background: var(--color-critical-bg); color: var(--color-critical); }
+.kpi-icon-wrap.critical{ background: var(--color-critical-bg);color: var(--color-critical); }
 .kpi-icon-wrap.unknown { background: var(--color-unknown-bg); color: var(--color-unknown); }
 
 .kpi-value-row {

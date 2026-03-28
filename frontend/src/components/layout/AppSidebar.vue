@@ -25,17 +25,17 @@ const navItems = [
     <nav class="sidebar-nav">
       <span class="nav-section-label">Navigation</span>
       <RouterLink
-        v-for="item in navItems"
+        v-for="(item, i) in navItems"
         :key="item.path"
         :to="item.path"
         class="nav-item"
         :class="{ active: route.path === item.path }"
+        :style="{ '--nav-delay': `${i * 0.07 + 0.1}s` }"
       >
         <i :class="item.icon" class="nav-icon" />
         <span>{{ item.label }}</span>
       </RouterLink>
     </nav>
-
   </aside>
 </template>
 
@@ -49,6 +49,12 @@ const navItems = [
   flex-shrink: 0;
   position: sticky;
   top: 0;
+  animation: sidebar-in 0.35s ease both;
+}
+
+@keyframes sidebar-in {
+  from { transform: translateX(-100%); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
 }
 
 .sidebar-logo {
@@ -57,11 +63,26 @@ const navItems = [
   gap: 12px;
   padding: 24px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  animation: fade-down 0.4s ease 0.2s both;
+}
+
+@keyframes fade-down {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .logo-icon {
   font-size: 26px;
   line-height: 1;
+  animation: heartbeat 2.5s ease-in-out infinite;
+}
+
+@keyframes heartbeat {
+  0%, 100% { transform: scale(1); }
+  14%       { transform: scale(1.15); }
+  28%       { transform: scale(1); }
+  42%       { transform: scale(1.1); }
+  56%       { transform: scale(1); }
 }
 
 .logo-text {
@@ -99,6 +120,12 @@ const navItems = [
   color: rgba(255, 255, 255, 0.25);
   padding: 0 8px;
   margin-bottom: 8px;
+  animation: fade-in 0.4s ease 0.3s both;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .nav-item {
@@ -110,13 +137,20 @@ const navItems = [
   font-size: 13.5px;
   font-weight: 500;
   color: var(--color-sidebar-text);
-  transition: all 0.15s ease;
   border-left: 2px solid transparent;
+  animation: nav-item-in 0.35s ease var(--nav-delay, 0.1s) both;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+
+@keyframes nav-item-in {
+  from { opacity: 0; transform: translateX(-12px); }
+  to   { opacity: 1; transform: translateX(0); }
 }
 
 .nav-item:hover {
   background: var(--color-sidebar-hover);
   color: #ffffff;
+  transform: translateX(3px);
 }
 
 .nav-item.active {
@@ -131,11 +165,16 @@ const navItems = [
   width: 18px;
   text-align: center;
   opacity: 0.85;
+  transition: transform 0.2s ease, opacity 0.15s ease;
+}
+
+.nav-item:hover .nav-icon {
+  opacity: 1;
+  transform: scale(1.15);
 }
 
 .nav-item.active .nav-icon {
   opacity: 1;
   color: var(--color-primary);
 }
-
 </style>
