@@ -1,35 +1,90 @@
 @import './base.css';
 
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  font-weight: normal;
+  display: flex;
+  min-height: 100vh;
 }
 
-a,
-.green {
+a {
   text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
+  color: inherit;
 }
 
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
+.page {
+  flex: 1;
+  padding: 32px;
+  overflow-y: auto;
 }
 
-@media (min-width: 1024px) {
-  body {
-    display: flex;
-    place-items: center;
-  }
+.page-header {
+  margin-bottom: 28px;
+}
 
-  #app {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
-  }
+.page-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+  letter-spacing: -0.3px;
+}
+
+.page-header p {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+}
+
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 14px;
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.status-badge.normal {
+  background: var(--color-normal-bg);
+  color: var(--color-normal);
+  border: 1px solid var(--color-normal-border);
+}
+
+.status-badge.warning {
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
+}
+
+.status-badge.critical {
+  background: var(--color-critical-bg);
+  color: var(--color-critical);
+  border: 1px solid var(--color-critical-border);
+}
+
+.status-badge.unknown {
+  background: var(--color-unknown-bg);
+  color: var(--color-unknown);
+  border: 1px solid var(--color-unknown-border);
 }
