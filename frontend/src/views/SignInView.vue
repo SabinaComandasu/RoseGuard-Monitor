@@ -47,17 +47,19 @@ function handleGoogleSignIn() {
       <div class="orb orb-3" />
 
       <div class="left-content">
-        <div class="brand animate-fade-down">
-          <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="brand-logo-img" />
-        </div>
+        <div class="brand-hero-group">
+          <div class="brand animate-fade-down">
+            <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="brand-logo-img" />
+          </div>
 
-        <div class="left-hero animate-fade-up" style="animation-delay: 0.1s">
+          <div class="left-hero animate-fade-up" style="animation-delay: 0.1s">
           <h2>Monitor your health,<br />live better every day.</h2>
           <p>
             Real-time biometric data from your wearable sensor —
             SpO2, heart rate, and temperature, all in one place.
           </p>
         </div>
+        </div><!-- end brand-hero-group -->
 
         <div class="left-features">
           <div class="feature-item animate-fade-up" style="animation-delay: 0.2s">
@@ -223,6 +225,12 @@ function handleGoogleSignIn() {
   gap: 40px;
   position: relative;
   z-index: 1;
+}
+
+.brand-hero-group {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .brand {
