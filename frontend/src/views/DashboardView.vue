@@ -18,7 +18,7 @@ const kpis: KpiItem[] = [
   { id: 'stress', label: 'Stress Indicator', value: 'Moderate', unit: '', status: 'warning', icon: 'pi pi-exclamation-circle', description: 'Derived from HRV & pulse patterns' },
   { id: 'temp', label: 'Body Temp Status', value: '36.6', unit: '°C', status: 'normal', icon: 'pi pi-sun', description: 'Normal range: 36.1 – 37.2 °C' },
   { id: 'anomaly', label: 'Anomaly Flags', value: '0', unit: '', status: 'normal', icon: 'pi pi-flag', description: 'Deviations from your baseline' },
-  { id: 'trend', label: '7-Day Trend', value: '+2.1', unit: '%', status: 'normal', icon: 'pi pi-trending-up', description: 'Overall health score change' },
+  { id: 'trend', label: '7-Day Trend', value: '+2.1', unit: '%', status: 'normal', icon: 'pi pi-chart-line', description: 'Overall health score change' },
   { id: 'rhr', label: 'Resting Heart Rate', value: '68', unit: 'BPM', status: 'normal', icon: 'pi pi-heart-fill', description: 'Average over last 24 hours' },
 ]
 
