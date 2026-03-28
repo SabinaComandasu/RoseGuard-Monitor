@@ -36,12 +36,6 @@ const navItems = [
       </RouterLink>
     </nav>
 
-    <div class="sidebar-footer">
-      <div class="connection-status">
-        <span class="status-dot" />
-        <span>Bluetooth Connected</span>
-      </div>
-    </div>
   </aside>
 </template>
 
@@ -144,30 +138,4 @@ const navItems = [
   color: var(--color-primary);
 }
 
-.sidebar-footer {
-  padding: 16px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.connection-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--color-sidebar-text);
-}
-
-.status-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #4caf50;
-  box-shadow: 0 0 6px rgba(76, 175, 80, 0.7);
-  animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
 </style>
