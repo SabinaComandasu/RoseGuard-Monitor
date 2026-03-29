@@ -1,8 +1,12 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import AppSidebar from './components/layout/AppSidebar.vue'
+import FloatingChatButton from './components/FloatingChatButton.vue'
+import ChatPanel from './components/ChatPanel.vue'
 
 const route = useRoute()
+const chatOpen = ref(false)
 </script>
 
 <template>
@@ -25,6 +29,9 @@ const route = useRoute()
         </Transition>
       </RouterView>
     </div>
+
+    <FloatingChatButton @toggle="chatOpen = !chatOpen" />
+    <ChatPanel :open="chatOpen" @close="chatOpen = false" />
   </template>
 </template>
 

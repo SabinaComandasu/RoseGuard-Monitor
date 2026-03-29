@@ -16,6 +16,7 @@
     "apexcharts": "^5.10.4",
     "axios": "^1.14.0",
     "jspdf": "^4.2.1",
+    "marked": "^17.0.5",
     "pinia": "^3.0.4",
     "primeicons": "^7.0.0",
     "primevue": "^4.5.4",

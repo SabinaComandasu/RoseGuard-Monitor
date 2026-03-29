@@ -5,10 +5,9 @@ const route = useRoute()
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: 'pi pi-th-large' },
-  { path: '/profile', label: 'Profile', icon: 'pi pi-user' },
-  { path: '/history', label: 'History', icon: 'pi pi-chart-line' },
-  { path: '/reports', label: 'Reports', icon: 'pi pi-file-pdf' },
-  { path: '/chat', label: 'AI Assistant', icon: 'pi pi-comments' },
+  { path: '/profile',   label: 'Profile',   icon: 'pi pi-user' },
+  { path: '/history',   label: 'History',   icon: 'pi pi-chart-line' },
+  { path: '/reports',   label: 'Reports',   icon: 'pi pi-file-pdf' },
 ]
 </script>
 
