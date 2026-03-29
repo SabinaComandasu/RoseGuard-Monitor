@@ -31,6 +31,7 @@ const route = useRoute()
 <style scoped>
 .app-main {
   margin-left: var(--sidebar-width);
+  width: calc(100vw - var(--sidebar-width));
   display: flex;
   flex-direction: column;
   min-height: 100vh;
