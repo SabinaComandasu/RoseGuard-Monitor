@@ -42,9 +42,12 @@ const navItems = [
   background: var(--color-sidebar-bg);
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
-  position: sticky;
+  position: fixed;
+  left: 0;
   top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
   animation: sidebar-in 0.35s ease both;
 }
 

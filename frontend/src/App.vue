@@ -30,11 +30,10 @@ const route = useRoute()
 
 <style scoped>
 .app-main {
-  flex: 1;
+  margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
   min-height: 100vh;
-  overflow-y: auto;
 }
 
 .app-header {
