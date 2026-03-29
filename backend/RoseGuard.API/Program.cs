@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using RoseGuard.API.Data;
 using RoseGuard.API.Hubs;
+using RoseGuard.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -49,6 +50,9 @@ builder.Services.AddCors(opt => opt.AddDefaultPolicy(p =>
      .AllowAnyHeader()
      .AllowAnyMethod()
      .AllowCredentials()));
+
+// ── App services ────────────────────────────────────────────
+builder.Services.AddScoped<TokenService>();
 
 // ── Controllers + SignalR + OpenAPI ─────────────────────────
 builder.Services.AddControllers();
