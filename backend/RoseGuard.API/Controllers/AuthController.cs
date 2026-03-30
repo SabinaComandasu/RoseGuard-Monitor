@@ -1,3 +1,4 @@
+using Google.Apis.Auth;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RoseGuard.API.Data;
@@ -9,7 +10,7 @@ namespace RoseGuard.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController(AppDbContext db, TokenService tokens) : ControllerBase
+public class AuthController(AppDbContext db, TokenService tokens, IConfiguration config) : ControllerBase
 {
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest req)
@@ -38,6 +39,43 @@ public class AuthController(AppDbContext db, TokenService tokens) : ControllerBa
 
         if (user is null || !BCrypt.Net.BCrypt.Verify(req.Password, user.PasswordHash))
             return Unauthorized(new { message = "Invalid email or password." });
+
+        return Ok(new AuthResponse(tokens.Generate(user), user.Email, user.FirstName, user.LastName));
+    }
+
+    [HttpPost("google")]
+    public async Task<IActionResult> Google(GoogleAuthRequest req)
+    {
+        GoogleJsonWebSignature.Payload payload;
+        try
+        {
+            var settings = new GoogleJsonWebSignature.ValidationSettings
+            {
+                Audience = [config["Google:ClientId"]!]
+            };
+            payload = await GoogleJsonWebSignature.ValidateAsync(req.IdToken, settings);
+        }
+        catch
+        {
+            return Unauthorized(new { message = "Invalid Google token." });
+        }
+
+        var email = payload.Email.ToLowerInvariant();
+        var user  = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
+
+        if (user is null)
+        {
+            user = new User
+            {
+                Email        = email,
+                PasswordHash = string.Empty,
+                FirstName    = payload.GivenName ?? payload.Name ?? email,
+                LastName     = payload.FamilyName ?? string.Empty,
+                AvatarUrl    = payload.Picture,
+            };
+            db.Users.Add(user);
+            await db.SaveChangesAsync();
+        }
 
         return Ok(new AuthResponse(tokens.Generate(user), user.Email, user.FirstName, user.LastName));
     }

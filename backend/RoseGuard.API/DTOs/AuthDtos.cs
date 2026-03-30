@@ -4,4 +4,6 @@ public record RegisterRequest(string Email, string Password, string FirstName, s
 
 public record LoginRequest(string Email, string Password);
 
+public record GoogleAuthRequest(string IdToken);
+
 public record AuthResponse(string Token, string Email, string FirstName, string LastName);
