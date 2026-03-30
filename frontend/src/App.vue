@@ -1,16 +1,22 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import FloatingChatButton from './components/FloatingChatButton.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import { useAuthStore } from './stores/auth'
+import { useUserStore } from './stores/user'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const user = useUserStore()
 const chatOpen = ref(false)
 const sidebarOpen = ref(true)
+
+onMounted(() => {
+  if (auth.isAuthenticated) user.load().catch(() => {})
+})
 
 function logout() {
   auth.logout()
