@@ -10,6 +10,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const chatOpen = ref(false)
+const sidebarOpen = ref(true)
 
 function logout() {
   auth.logout()
@@ -23,17 +24,22 @@ function logout() {
 
   <!-- Authenticated shell -->
   <template v-else>
-    <AppSidebar />
-    <div class="app-main">
+    <AppSidebar :open="sidebarOpen" />
+    <div class="app-main" :class="{ expanded: !sidebarOpen }">
       <header class="app-header">
-        <div class="connection-status">
-          <span class="status-dot" />
-          <span>Bluetooth Connected</span>
-        </div>
-        <button class="logout-btn" @click="logout">
-          <i class="pi pi-sign-out" />
-          Log out
+        <button class="toggle-btn" @click="sidebarOpen = !sidebarOpen" :title="sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'">
+          <i :class="sidebarOpen ? 'pi pi-angle-left' : 'pi pi-angle-right'" />
         </button>
+        <div class="header-right">
+          <div class="connection-status">
+            <span class="status-dot" />
+            <span>Bluetooth Connected</span>
+          </div>
+          <button class="logout-btn" @click="logout">
+            <i class="pi pi-sign-out" />
+            Log out
+          </button>
+        </div>
       </header>
       <RouterView v-slot="{ Component }">
         <Transition name="page" mode="out-in">
@@ -54,19 +60,53 @@ function logout() {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  transition: margin-left 0.3s ease, width 0.3s ease;
+}
+
+.app-main.expanded {
+  margin-left: var(--sidebar-collapsed-width);
+  width: calc(100vw - var(--sidebar-collapsed-width));
 }
 
 .app-header {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px;
   padding: 12px 32px;
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1.5px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.toggle-btn:hover {
+  background: var(--color-primary-light);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  transform: scale(1.08);
 }
 
 .logout-btn {

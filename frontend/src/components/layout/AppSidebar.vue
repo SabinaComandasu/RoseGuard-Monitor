@@ -1,7 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useUserStore } from '@/stores/user'
+
+defineProps<{ open: boolean }>()
 
 const route = useRoute()
+const auth = useAuthStore()
+const user = useUserStore()
+
+const initials = computed(() => {
+  const f = auth.user?.firstName?.[0] ?? ''
+  const l = auth.user?.lastName?.[0] ?? ''
+  return (f + l).toUpperCase() || '?'
+})
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: 'pi pi-th-large' },
@@ -12,25 +25,38 @@ const navItems = [
 </script>
 
 <template>
-  <aside class="sidebar">
-    <div class="sidebar-logo">
-      <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="logo-img" />
+  <aside class="sidebar" :class="{ collapsed: !open }">
+    <div class="sidebar-logo" v-if="open">
+      <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="logo-full" />
     </div>
 
     <nav class="sidebar-nav">
       <span class="nav-section-label">Navigation</span>
       <RouterLink
-        v-for="(item, i) in navItems"
+        v-for="item in navItems"
         :key="item.path"
         :to="item.path"
         class="nav-item"
         :class="{ active: route.path === item.path }"
-        :style="{ '--nav-delay': `${i * 0.07 + 0.1}s` }"
+        :title="!open ? item.label : ''"
       >
         <i :class="item.icon" class="nav-icon" />
-        <span>{{ item.label }}</span>
+        <span class="nav-label">{{ item.label }}</span>
       </RouterLink>
     </nav>
+
+    <!-- User profile footer -->
+    <RouterLink to="/profile" class="user-footer" :class="{ collapsed: !open }" :title="!open ? (auth.user?.firstName ?? 'Profile') : ''">
+      <div class="user-avatar">
+        <img v-if="user.avatarUrl" :src="user.avatarUrl" class="avatar-img" alt="avatar" />
+        <span v-else class="avatar-initials">{{ initials }}</span>
+      </div>
+      <div class="user-info" v-if="open">
+        <span class="user-name">{{ auth.user?.firstName }} {{ auth.user?.lastName }}</span>
+        <span class="user-email">{{ auth.user?.email }}</span>
+      </div>
+      <i v-if="open" class="pi pi-angle-right user-arrow" />
+    </RouterLink>
   </aside>
 </template>
 
@@ -45,31 +71,26 @@ const navItems = [
   left: 0;
   top: 0;
   height: 100vh;
-  overflow-y: auto;
+  overflow: hidden;
   z-index: 100;
-  animation: sidebar-in 0.35s ease both;
+  transition: width 0.3s ease;
 }
 
-@keyframes sidebar-in {
-  from { transform: translateX(-100%); opacity: 0; }
-  to   { transform: translateX(0);     opacity: 1; }
+.sidebar.collapsed {
+  width: var(--sidebar-collapsed-width);
 }
 
+/* ---- Logo ---- */
 .sidebar-logo {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  animation: fade-down 0.4s ease 0.2s both;
+  flex-shrink: 0;
 }
 
-@keyframes fade-down {
-  from { opacity: 0; transform: translateY(-8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-.logo-img {
+.logo-full {
   width: 148px;
   height: auto;
   display: block;
@@ -88,12 +109,14 @@ const navItems = [
   56%       { transform: scale(1); }
 }
 
+/* ---- Nav ---- */
 .sidebar-nav {
   flex: 1;
-  padding: 20px 12px;
+  padding: 20px 8px;
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow: hidden;
 }
 
 .nav-section-label {
@@ -104,12 +127,13 @@ const navItems = [
   color: rgba(255, 255, 255, 0.25);
   padding: 0 8px;
   margin-bottom: 8px;
-  animation: fade-in 0.4s ease 0.3s both;
+  white-space: nowrap;
+  overflow: hidden;
+  transition: opacity 0.2s ease;
 }
 
-@keyframes fade-in {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+.sidebar.collapsed .nav-section-label {
+  opacity: 0;
 }
 
 .nav-item {
@@ -122,18 +146,26 @@ const navItems = [
   font-weight: 500;
   color: var(--color-sidebar-text);
   border-left: 2px solid transparent;
-  animation: nav-item-in 0.35s ease var(--nav-delay, 0.1s) both;
-  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, padding 0.3s ease, justify-content 0.3s ease;
 }
 
-@keyframes nav-item-in {
-  from { opacity: 0; transform: translateX(-12px); }
-  to   { opacity: 1; transform: translateX(0); }
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 10px 0;
+  border-left-color: transparent !important;
+}
+
+.sidebar.collapsed .nav-item.active {
+  background: var(--color-sidebar-active-bg);
 }
 
 .nav-item:hover {
   background: var(--color-sidebar-hover);
   color: #ffffff;
+}
+
+.sidebar:not(.collapsed) .nav-item:hover {
   transform: translateX(3px);
 }
 
@@ -145,20 +177,104 @@ const navItems = [
 }
 
 .nav-icon {
-  font-size: 14px;
+  font-size: 16px;
   width: 18px;
   text-align: center;
   opacity: 0.85;
-  transition: transform 0.2s ease, opacity 0.15s ease;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease, transform 0.2s ease;
 }
 
-.nav-item:hover .nav-icon {
+.nav-item:hover .nav-icon { opacity: 1; }
+.nav-item.active .nav-icon { opacity: 1; color: var(--color-primary); }
+
+.nav-label {
+  overflow: hidden;
   opacity: 1;
-  transform: scale(1.15);
+  max-width: 200px;
+  transition: opacity 0.2s ease, max-width 0.3s ease;
 }
 
-.nav-item.active .nav-icon {
-  opacity: 1;
+.sidebar.collapsed .nav-label {
+  opacity: 0;
+  max-width: 0;
+}
+
+/* ---- User footer ---- */
+.user-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: background 0.15s ease;
+  flex-shrink: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.user-footer.collapsed {
+  justify-content: center;
+  padding: 14px 0;
+}
+
+.user-footer:hover {
+  background: var(--color-sidebar-hover);
+}
+
+.user-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(233, 30, 140, 0.2);
+  border: 1.5px solid rgba(233, 30, 140, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-initials {
+  font-size: 12px;
+  font-weight: 700;
   color: var(--color-primary);
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-email {
+  font-size: 11px;
+  color: var(--color-sidebar-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-arrow {
+  font-size: 12px;
+  color: var(--color-sidebar-text);
+  flex-shrink: 0;
 }
 </style>
