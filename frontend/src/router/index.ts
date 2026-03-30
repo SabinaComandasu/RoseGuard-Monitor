@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -34,6 +35,16 @@ const router = createRouter({
       component: () => import('../views/ReportsView.vue'),
     },
   ],
+})
+
+router.beforeEach((to) => {
+  const auth = useAuthStore()
+  if (!to.meta.public && !auth.isAuthenticated) {
+    return { name: 'signin' }
+  }
+  if (to.name === 'signin' && auth.isAuthenticated) {
+    return { name: 'dashboard' }
+  }
 })
 
 export default router

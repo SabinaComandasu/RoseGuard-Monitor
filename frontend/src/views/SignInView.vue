@@ -1,27 +1,80 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 const router = useRouter()
+const auth = useAuthStore()
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
+
+onMounted(() => {
+  if (!window.google) return
+  window.google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: async (response: { credential: string }) => {
+      try {
+        await auth.loginWithGoogle(response.credential)
+        router.push('/dashboard')
+      } catch (e: any) {
+        error.value = e.message
+        triggerShake()
+      }
+    },
+  })
+  window.google.accounts.id.renderButton(
+    document.getElementById('google-btn')!,
+    { type: 'standard', theme: 'outline', size: 'large', width: 360, text: 'continue_with' }
+  )
+})
+
+const mode = ref<'login' | 'register'>('login')
 const email = ref('')
 const password = ref('')
+const firstName = ref('')
+const lastName = ref('')
 const loading = ref(false)
 const error = ref('')
 const shakeError = ref(false)
 
-async function handleSignIn() {
-  if (!email.value || !password.value) {
-    error.value = 'Please enter your email and password.'
-    triggerShake()
-    return
-  }
+function switchMode(m: 'login' | 'register') {
+  mode.value = m
   error.value = ''
+  email.value = ''
+  password.value = ''
+  firstName.value = ''
+  lastName.value = ''
+}
+
+async function handleSubmit() {
+  error.value = ''
+
+  if (mode.value === 'login') {
+    if (!email.value || !password.value) {
+      error.value = 'Please enter your email and password.'
+      triggerShake(); return
+    }
+  } else {
+    if (!firstName.value || !lastName.value || !email.value || !password.value) {
+      error.value = 'Please fill in all fields.'
+      triggerShake(); return
+    }
+  }
+
   loading.value = true
-  setTimeout(() => {
-    loading.value = false
+  try {
+    if (mode.value === 'login') {
+      await auth.login(email.value, password.value)
+    } else {
+      await auth.register(email.value, password.value, firstName.value, lastName.value)
+    }
     router.push('/dashboard')
-  }, 800)
+  } catch (e: any) {
+    error.value = e.message
+    triggerShake()
+  } finally {
+    loading.value = false
+  }
 }
 
 function triggerShake() {
@@ -30,10 +83,6 @@ function triggerShake() {
     shakeError.value = true
     setTimeout(() => { shakeError.value = false }, 500)
   })
-}
-
-function handleGoogleSignIn() {
-  router.push('/dashboard')
 }
 </script>
 
@@ -82,24 +131,14 @@ function handleGoogleSignIn() {
     <div class="signin-right">
       <div class="form-card animate-fade-up">
         <div class="form-header">
-          <h1>Welcome back</h1>
-          <p>Sign in to your RoseGuard account</p>
+          <h1>{{ mode === 'login' ? 'Welcome back' : 'Create account' }}</h1>
+          <p>{{ mode === 'login' ? 'Sign in to your RoseGuard account' : 'Start monitoring your health today' }}</p>
         </div>
 
-        <!-- Google button -->
-        <button class="google-btn" @click="handleGoogleSignIn">
-          <svg class="google-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-            <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-            <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-            <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-          </svg>
-          Continue with Google
-        </button>
+        <!-- Google button (rendered by GSI library) -->
+        <div id="google-btn" class="google-btn-wrap" />
 
-        <div class="divider">
-          <span>or sign in with email</span>
-        </div>
+        <div class="divider"><span>or continue with email</span></div>
 
         <!-- Error message -->
         <Transition name="error">
@@ -109,46 +148,60 @@ function handleGoogleSignIn() {
         </Transition>
 
         <!-- Form -->
-        <form class="signin-form" @submit.prevent="handleSignIn">
+        <form class="signin-form" @submit.prevent="handleSubmit">
+          <Transition name="fields" mode="out-in">
+            <div v-if="mode === 'register'" class="name-row" key="name">
+              <div class="field">
+                <label for="firstName">First name</label>
+                <div class="input-wrap">
+                  <i class="pi pi-user input-icon" />
+                  <input id="firstName" v-model="firstName" type="text" placeholder="Ana" autocomplete="given-name" />
+                </div>
+              </div>
+              <div class="field">
+                <label for="lastName">Last name</label>
+                <div class="input-wrap">
+                  <i class="pi pi-user input-icon" />
+                  <input id="lastName" v-model="lastName" type="text" placeholder="Ionescu" autocomplete="family-name" />
+                </div>
+              </div>
+            </div>
+          </Transition>
+
           <div class="field">
             <label for="email">Email address</label>
             <div class="input-wrap">
               <i class="pi pi-envelope input-icon" />
-              <input
-                id="email"
-                v-model="email"
-                type="email"
-                placeholder="you@example.com"
-                autocomplete="email"
-              />
+              <input id="email" v-model="email" type="email" placeholder="you@example.com" autocomplete="email" />
             </div>
           </div>
 
           <div class="field">
             <div class="label-row">
               <label for="password">Password</label>
-              <a href="#" class="forgot-link">Forgot password?</a>
+              <a v-if="mode === 'login'" href="#" class="forgot-link">Forgot password?</a>
             </div>
             <div class="input-wrap">
               <i class="pi pi-lock input-icon" />
-              <input
-                id="password"
-                v-model="password"
-                type="password"
-                placeholder="••••••••"
-                autocomplete="current-password"
-              />
+              <input id="password" v-model="password" type="password" placeholder="••••••••" autocomplete="current-password" />
             </div>
           </div>
 
-          <button type="submit" class="signin-btn" :class="{ loading }" :disabled="loading">
+          <button type="submit" class="signin-btn" :disabled="loading">
             <i v-if="loading" class="pi pi-spin pi-spinner" />
-            <span>{{ loading ? 'Signing in…' : 'Sign in' }}</span>
+            <span>{{ loading ? '…' : mode === 'login' ? 'Sign in' : 'Create account' }}</span>
           </button>
         </form>
 
         <p class="signup-link">
-          Don't have an account? <a href="#">Create one</a>
+          <template v-if="mode === 'login'">
+            Don't have an account?
+            <a href="#" @click.prevent="switchMode('register')">Create one</a>
+          </template>
+          <template v-else>
+            Already have an account?
+            <a href="#" @click.prevent="switchMode('login')">Sign in</a>
+          </template>
         </p>
       </div>
     </div>
@@ -347,37 +400,10 @@ function handleGoogleSignIn() {
 }
 
 /* Google button */
-.google-btn {
-  width: 100%;
+.google-btn-wrap {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 10px;
-  padding: 11px 16px;
-  border: 1.5px solid #e0e0e0;
-  border-radius: var(--radius-sm);
-  background: #ffffff;
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--color-text-primary);
-  cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
-}
-
-.google-btn:hover {
-  border-color: #bdbdbd;
-  background: #fafafa;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
-}
-
-.google-btn:active {
-  transform: translateY(0px) scale(0.98);
-}
-
-.google-icon {
-  width: 18px;
-  height: 18px;
+  width: 100%;
 }
 
 /* Divider */
@@ -434,6 +460,16 @@ function handleGoogleSignIn() {
   from { opacity: 0; transform: translateY(-6px) scale(0.97); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+.name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.fields-enter-active, .fields-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
+.fields-enter-from { opacity: 0; transform: translateY(-8px); }
+.fields-leave-to   { opacity: 0; transform: translateY(-8px); }
 
 /* Form fields */
 .signin-form {
