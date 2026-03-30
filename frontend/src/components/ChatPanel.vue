@@ -15,17 +15,18 @@ const input = ref('')
 const messagesEl = ref<HTMLElement | null>(null)
 const isTyping = ref(false)
 const error = ref('')
+const historyOpen = ref(false)
 
 const GROQ_KEY = import.meta.env.VITE_GROQ_KEY
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
 
 function systemContext() {
-  return `Ești un asistent medical integrat în aplicația RoseGuard Monitor.
-Pacient curent: ${user.fullName || 'Necunoscut'}.
-Citiri live — SpO2: ${biometrics.spo2 ?? 'N/A'}%, Frecvență cardiacă: ${biometrics.heartRate ?? 'N/A'} BPM, Temperatură: ${biometrics.temperature ?? 'N/A'}°C.
-Always reply in English, regardless of the language the user writes in.
-Structurează răspunsurile cu liste cu puncte, secțiuni clare și text îngroșat pentru termeni importanți.
-Fii concis și practic. Recomandă întotdeauna consultarea unui medic pentru decizii medicale importante.`
+  return `You are a medical assistant integrated into the RoseGuard Monitor app.
+Current patient: ${user.fullName || 'Unknown'}.
+Live readings — SpO2: ${biometrics.spo2 ?? 'N/A'}%, Heart rate: ${biometrics.heartRate ?? 'N/A'} BPM, Temperature: ${biometrics.temperature ?? 'N/A'}°C.
+Always reply in English only, regardless of the language the user writes in.
+Structure responses with bullet points, clear sections, and bold text for important terms.
+Be concise and practical. Always recommend consulting a doctor for important medical decisions.`
 }
 
 function renderMarkdown(text: string): string {
@@ -34,9 +35,7 @@ function renderMarkdown(text: string): string {
 
 function scrollToBottom() {
   nextTick(() => {
-    if (messagesEl.value) {
-      messagesEl.value.scrollTop = messagesEl.value.scrollHeight
-    }
+    if (messagesEl.value) messagesEl.value.scrollTop = messagesEl.value.scrollHeight
   })
 }
 
@@ -46,6 +45,8 @@ watch(() => props.open, (val) => { if (val) scrollToBottom() })
 async function send() {
   const text = input.value.trim()
   if (!text) return
+
+  if (!chat.activeConversation) chat.newConversation()
 
   error.value = ''
   input.value = ''
@@ -76,17 +77,13 @@ async function send() {
     })
 
     const data = await res.json()
-
-    if (!res.ok) {
-      const msg = data?.error?.message ?? `HTTP ${res.status}`
-      throw new Error(msg)
-    }
+    if (!res.ok) throw new Error(data?.error?.message ?? `HTTP ${res.status}`)
 
     const reply = data.choices?.[0]?.message?.content ?? 'No response received.'
     chat.addMessage({ role: 'assistant', content: reply, timestamp: new Date().toISOString() })
   } catch (e: any) {
-    error.value = e.message ?? 'Failed to reach Gemini.'
-    console.error('[Gemini]', e)
+    error.value = e.message ?? 'Failed to reach AI.'
+    console.error('[Chat]', e)
   } finally {
     isTyping.value = false
   }
@@ -102,6 +99,21 @@ function onKeydown(e: KeyboardEvent) {
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
+
+function formatDate(iso: string) {
+  const d = new Date(iso)
+  const today = new Date()
+  if (d.toDateString() === today.toDateString()) return 'Today'
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday'
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
+function selectConversation(id: string) {
+  chat.switchConversation(id)
+  scrollToBottom()
+}
 </script>
 
 <template>
@@ -112,77 +124,119 @@ function formatTime(iso: string) {
 
   <!-- Panel -->
   <Transition name="panel">
-    <div v-if="open" class="chat-panel">
-      <!-- Header -->
-      <div class="panel-header">
-        <div class="header-left">
-          <div class="avatar">
-            <i class="pi pi-sparkles" />
-          </div>
-          <div>
-            <div class="header-title">AI Assistant</div>
-            <div class="header-sub">Powered by Claude</div>
-          </div>
-        </div>
-        <button class="close-btn" @click="emit('close')">
-          <i class="pi pi-times" />
-        </button>
-      </div>
+    <div v-if="open" class="chat-panel" :class="{ 'with-history': historyOpen }">
 
-      <!-- Messages -->
-      <div class="messages" ref="messagesEl">
-        <!-- Empty state -->
-        <div v-if="chat.messages.length === 0 && !isTyping" class="empty-chat">
-          <div class="empty-icon"><i class="pi pi-comments" /></div>
-          <p>Ask me anything about your health data, readings, or wellness tips.</p>
-        </div>
-
-        <div
-          v-for="(msg, i) in chat.messages"
-          :key="i"
-          class="message-row"
-          :class="msg.role"
-        >
-          <div v-if="msg.role === 'assistant'" class="msg-avatar">
-            <i class="pi pi-sparkles" />
+      <!-- History sidebar -->
+      <Transition name="history">
+        <div v-if="historyOpen" class="history-sidebar">
+          <div class="history-header">
+            <span class="history-title">Chats</span>
+            <button class="icon-btn" @click="chat.newConversation(); historyOpen = false" title="New chat">
+              <i class="pi pi-plus" />
+            </button>
           </div>
-          <div class="bubble">
+          <div class="history-list">
             <div
-              v-if="msg.role === 'assistant'"
-              class="bubble-text markdown"
-              v-html="renderMarkdown(msg.content)"
-            />
-            <div v-else class="bubble-text">{{ msg.content }}</div>
-            <div class="bubble-time">{{ formatTime(msg.timestamp) }}</div>
+              v-if="chat.conversations.length === 0"
+              class="history-empty"
+            >No conversations yet</div>
+            <div
+              v-for="conv in chat.conversations"
+              :key="conv.id"
+              class="history-item"
+              :class="{ active: conv.id === chat.activeId }"
+              @click="selectConversation(conv.id)"
+            >
+              <div class="history-item-title">{{ conv.title }}</div>
+              <div class="history-item-meta">{{ formatDate(conv.createdAt) }}</div>
+              <button
+                class="delete-btn"
+                @click.stop="chat.deleteConversation(conv.id)"
+                title="Delete"
+              >
+                <i class="pi pi-trash" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- Main chat -->
+      <div class="chat-main">
+        <!-- Header -->
+        <div class="panel-header">
+          <div class="header-left">
+            <button class="icon-btn" @click="historyOpen = !historyOpen" :title="historyOpen ? 'Hide history' : 'Show history'">
+              <i class="pi pi-history" />
+            </button>
+            <div class="avatar"><i class="pi pi-sparkles" /></div>
+            <div>
+              <div class="header-title">AI Assistant</div>
+              <div class="header-sub">Powered by Groq</div>
+            </div>
+          </div>
+          <div class="header-actions">
+            <button class="icon-btn" @click="chat.newConversation()" title="New chat">
+              <i class="pi pi-plus" />
+            </button>
+            <button class="close-btn" @click="emit('close')">
+              <i class="pi pi-times" />
+            </button>
           </div>
         </div>
 
-        <!-- Error -->
-        <div v-if="error" class="chat-error">
-          <i class="pi pi-exclamation-triangle" /> {{ error }}
-        </div>
+        <!-- Messages -->
+        <div class="messages" ref="messagesEl">
+          <div v-if="chat.messages.length === 0 && !isTyping" class="empty-chat">
+            <div class="empty-icon"><i class="pi pi-comments" /></div>
+            <p>Ask me anything about your health data, readings, or wellness tips.</p>
+          </div>
 
-        <!-- Typing indicator -->
-        <div v-if="isTyping" class="message-row assistant">
-          <div class="msg-avatar"><i class="pi pi-sparkles" /></div>
-          <div class="bubble typing-bubble">
-            <span /><span /><span />
+          <div
+            v-for="(msg, i) in chat.messages"
+            :key="i"
+            class="message-row"
+            :class="msg.role"
+          >
+            <div v-if="msg.role === 'assistant'" class="msg-avatar">
+              <i class="pi pi-sparkles" />
+            </div>
+            <div class="bubble">
+              <div
+                v-if="msg.role === 'assistant'"
+                class="bubble-text markdown"
+                v-html="renderMarkdown(msg.content)"
+              />
+              <div v-else class="bubble-text">{{ msg.content }}</div>
+              <div class="bubble-time">{{ formatTime(msg.timestamp) }}</div>
+            </div>
+          </div>
+
+          <div v-if="error" class="chat-error">
+            <i class="pi pi-exclamation-triangle" /> {{ error }}
+          </div>
+
+          <div v-if="isTyping" class="message-row assistant">
+            <div class="msg-avatar"><i class="pi pi-sparkles" /></div>
+            <div class="bubble typing-bubble">
+              <span /><span /><span />
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Input -->
-      <div class="panel-footer">
-        <textarea
-          v-model="input"
-          class="chat-input"
-          placeholder="Ask about your health data…"
-          rows="1"
-          @keydown="onKeydown"
-        />
-        <button class="send-btn" :disabled="!input.trim()" @click="send">
-          <i class="pi pi-send" />
-        </button>
+        <!-- Input -->
+        <div class="panel-footer">
+          <textarea
+            v-model="input"
+            class="chat-input"
+            placeholder="Ask about your health data…"
+            rows="1"
+            @keydown="onKeydown"
+          />
+          <button class="send-btn" :disabled="!input.trim()" @click="send">
+            <i class="pi pi-send" />
+          </button>
+        </div>
       </div>
     </div>
   </Transition>
@@ -197,7 +251,6 @@ function formatTime(iso: string) {
   background: rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(2px);
 }
-
 .backdrop-enter-active, .backdrop-leave-active { transition: opacity 0.25s ease; }
 .backdrop-enter-from, .backdrop-leave-to        { opacity: 0; }
 
@@ -207,26 +260,136 @@ function formatTime(iso: string) {
   top: 0;
   right: 0;
   height: 100vh;
-  width: 380px;
+  width: 400px;
   z-index: 300;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   background: var(--color-bg);
   border-left: 1px solid var(--color-border);
   box-shadow: -8px 0 40px rgba(0, 0, 0, 0.35);
+  transition: width 0.3s ease;
+}
+
+.chat-panel.with-history {
+  width: 600px;
 }
 
 .panel-enter-active { transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease; }
-.panel-leave-active { transition: transform 0.22s ease,                              opacity 0.2s ease; }
+.panel-leave-active { transition: transform 0.22s ease, opacity 0.2s ease; }
 .panel-enter-from   { transform: translateX(100%); opacity: 0; }
 .panel-leave-to     { transform: translateX(100%); opacity: 0; }
+
+/* ── History sidebar ──────────────────────────────────────── */
+.history-sidebar {
+  width: 200px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.history-enter-active { transition: width 0.3s ease, opacity 0.2s ease; }
+.history-leave-active { transition: width 0.25s ease, opacity 0.15s ease; }
+.history-enter-from   { width: 0; opacity: 0; }
+.history-leave-to     { width: 0; opacity: 0; }
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 12px 12px;
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.history-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.history-empty {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: 20px 8px;
+}
+
+.history-item {
+  position: relative;
+  padding: 9px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.history-item:hover { background: var(--color-bg); }
+.history-item.active { background: var(--color-primary-light); }
+
+.history-item-title {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 20px;
+}
+
+.history-item-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.delete-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.history-item:hover .delete-btn { opacity: 1; }
+.delete-btn:hover { background: var(--color-critical-bg); color: var(--color-critical); }
+
+/* ── Chat main ────────────────────────────────────────────── */
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 
 /* ── Header ───────────────────────────────────────────────── */
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 18px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
@@ -234,24 +397,30 @@ function formatTime(iso: string) {
 .header-left {
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 9px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .avatar {
-  width: 38px;
-  height: 38px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: var(--color-primary-light);
   color: var(--color-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 17px;
+  font-size: 15px;
   flex-shrink: 0;
 }
 
 .header-title {
-  font-size: 14px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--color-text-primary);
 }
@@ -259,12 +428,31 @@ function formatTime(iso: string) {
 .header-sub {
   font-size: 11px;
   color: var(--color-text-secondary);
-  margin-top: 1px;
+}
+
+.icon-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.icon-btn:hover {
+  background: var(--color-surface);
+  color: var(--color-primary);
 }
 
 .close-btn {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   border: none;
   background: transparent;
@@ -334,9 +522,7 @@ function formatTime(iso: string) {
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.message-row.user {
-  flex-direction: row-reverse;
-}
+.message-row.user { flex-direction: row-reverse; }
 
 .msg-avatar {
   width: 28px;
@@ -378,7 +564,6 @@ function formatTime(iso: string) {
   opacity: 0.55;
 }
 
-/* Markdown rendering */
 :deep(.markdown) { line-height: 1.55; }
 :deep(.markdown p)  { margin: 0 0 6px; }
 :deep(.markdown p:last-child) { margin-bottom: 0; }
@@ -399,7 +584,6 @@ function formatTime(iso: string) {
   color: var(--color-text-primary);
 }
 
-/* Typing indicator */
 .typing-bubble {
   display: flex;
   align-items: center;
@@ -464,13 +648,8 @@ function formatTime(iso: string) {
   overflow-y: auto;
 }
 
-.chat-input:focus {
-  border-color: var(--color-primary);
-}
-
-.chat-input::placeholder {
-  color: var(--color-text-muted);
-}
+.chat-input:focus { border-color: var(--color-primary); }
+.chat-input::placeholder { color: var(--color-text-muted); }
 
 .send-btn {
   width: 40px;
