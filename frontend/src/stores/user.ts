@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import api from '@/services/api'
 
 export const useUserStore = defineStore('user', () => {
   // Personal
@@ -48,6 +49,56 @@ export const useUserStore = defineStore('user', () => {
 
   const fullName = computed(() => [firstName.value, lastName.value].filter(Boolean).join(' '))
 
+  async function load() {
+    const { data } = await api.get('/profile')
+    firstName.value          = data.firstName ?? ''
+    lastName.value           = data.lastName ?? ''
+    email.value              = data.email ?? ''
+    dateOfBirth.value        = data.dateOfBirth ?? ''
+    sex.value                = data.sex ?? ''
+    bloodType.value          = data.bloodType ?? ''
+    phone.value              = data.phone ?? ''
+    avatarUrl.value          = data.avatarUrl ?? ''
+    heightCm.value           = data.heightCm ?? null
+    weightKg.value           = data.weightKg ?? null
+    targetWeightKg.value     = data.targetWeightKg ?? null
+    conditions.value         = data.conditions ?? ''
+    medications.value        = data.medications ?? ''
+    allergies.value          = data.allergies ?? ''
+    fitnessLevel.value       = data.fitnessLevel ?? ''
+    smokingStatus.value      = data.smokingStatus ?? ''
+    alcoholConsumption.value = data.alcoholConsumption ?? ''
+    sleepHours.value         = data.sleepHours ?? null
+    emergencyName.value      = data.emergencyName ?? ''
+    emergencyPhone.value     = data.emergencyPhone ?? ''
+    emergencyRelationship.value = data.emergencyRelationship ?? ''
+  }
+
+  async function save() {
+    await api.put('/profile', {
+      firstName:            firstName.value,
+      lastName:             lastName.value,
+      dateOfBirth:          dateOfBirth.value || null,
+      sex:                  sex.value || null,
+      bloodType:            bloodType.value || null,
+      phone:                phone.value || null,
+      avatarUrl:            avatarUrl.value || null,
+      heightCm:             heightCm.value,
+      weightKg:             weightKg.value,
+      targetWeightKg:       targetWeightKg.value,
+      conditions:           conditions.value || null,
+      medications:          medications.value || null,
+      allergies:            allergies.value || null,
+      fitnessLevel:         fitnessLevel.value || null,
+      smokingStatus:        smokingStatus.value || null,
+      alcoholConsumption:   alcoholConsumption.value || null,
+      sleepHours:           sleepHours.value,
+      emergencyName:        emergencyName.value || null,
+      emergencyPhone:       emergencyPhone.value || null,
+      emergencyRelationship: emergencyRelationship.value || null,
+    })
+  }
+
   return {
     firstName, lastName, dateOfBirth, sex, bloodType, email, phone, avatarUrl,
     heightCm, weightKg, targetWeightKg,
@@ -55,5 +106,6 @@ export const useUserStore = defineStore('user', () => {
     fitnessLevel, smokingStatus, alcoholConsumption, sleepHours,
     emergencyName, emergencyPhone, emergencyRelationship,
     bmi, age, fullName,
+    load, save,
   }
 })

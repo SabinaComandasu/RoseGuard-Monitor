@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 
 const user = useUserStore()
 
 const saved = ref(false)
+const saving = ref(false)
 const avatarInput = ref<HTMLInputElement | null>(null)
+
+onMounted(() => { user.load().catch(() => {}) })
 
 function onAvatarClick() {
   avatarInput.value?.click()
@@ -19,9 +22,15 @@ function onAvatarChange(e: Event) {
   reader.readAsDataURL(file)
 }
 
-function saveProfile() {
-  saved.value = true
-  setTimeout(() => { saved.value = false }, 2500)
+async function saveProfile() {
+  saving.value = true
+  try {
+    await user.save()
+    saved.value = true
+    setTimeout(() => { saved.value = false }, 2500)
+  } finally {
+    saving.value = false
+  }
 }
 
 const bmiLabel = computed(() => {
@@ -322,9 +331,9 @@ const initials = computed(() => {
           <i class="pi pi-check-circle" /> Profile saved successfully
         </div>
       </Transition>
-      <button class="save-btn" @click="saveProfile">
-        <i class="pi pi-save" />
-        Save Profile
+      <button class="save-btn" :disabled="saving" @click="saveProfile">
+        <i :class="saving ? 'pi pi-spin pi-spinner' : 'pi pi-save'" />
+        {{ saving ? 'Saving…' : 'Save Profile' }}
       </button>
     </div>
   </div>
