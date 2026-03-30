@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import FloatingChatButton from './components/FloatingChatButton.vue'
 import ChatPanel from './components/ChatPanel.vue'
+import { useAuthStore } from './stores/auth'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 const chatOpen = ref(false)
+
+function logout() {
+  auth.logout()
+  router.push('/signin')
+}
 </script>
 
 <template>
@@ -22,6 +30,10 @@ const chatOpen = ref(false)
           <span class="status-dot" />
           <span>Bluetooth Connected</span>
         </div>
+        <button class="logout-btn" @click="logout">
+          <i class="pi pi-sign-out" />
+          Log out
+        </button>
       </header>
       <RouterView v-slot="{ Component }">
         <Transition name="page" mode="out-in">
@@ -48,12 +60,39 @@ const chatOpen = ref(false)
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 10px;
   padding: 12px 32px;
   background: var(--color-bg);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 10;
+}
+
+.logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border: 1.5px solid var(--color-primary);
+  border-radius: 20px;
+  background: rgba(233, 30, 140, 0.08);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.logout-btn:hover {
+  background: rgba(233, 30, 140, 0.16);
+  box-shadow: 0 2px 10px rgba(233, 30, 140, 0.25);
+  transform: translateY(-1px);
+}
+
+.logout-btn:active {
+  transform: translateY(0) scale(0.97);
 }
 
 .connection-status {
