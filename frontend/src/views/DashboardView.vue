@@ -1,21 +1,40 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import LiveReadingCard from '@/components/LiveReadingCard.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import { generateDashboardPdf } from '@/services/pdfGenerator'
 import { useReportsStore } from '@/stores/reports'
 import { useUserStore } from '@/stores/user'
+import { useBiometricsStore } from '@/stores/biometrics'
+import { connectBle, disconnectBle } from '@/services/ble'
 import type { KpiItem } from '@/types'
 
 const reportsStore = useReportsStore()
-const userStore = useUserStore()
+const userStore    = useUserStore()
+const bioStore     = useBiometricsStore()
 
-// --- Mock live readings (will be replaced by SignalR) ---
-const spo2 = ref(98)
-const heartRate = ref(72)
-const temperature = ref(36.6)
-const lastUpdated = ref(new Date().toLocaleTimeString())
+const spo2        = computed(() => bioStore.spo2        ?? 0)
+const heartRate   = computed(() => bioStore.heartRate   ?? 0)
+const temperature = computed(() => bioStore.temperature ?? 0)
+const lastUpdated = computed(() => bioStore.lastUpdated ?? '--')
+
 const downloadingPdf = ref(false)
+const bleConnecting  = ref(false)
+
+async function toggleBle() {
+  if (bioStore.bleConnected) {
+    await disconnectBle()
+    return
+  }
+  bleConnecting.value = true
+  try {
+    await connectBle()
+  } catch (e) {
+    console.error('BLE connect failed', e)
+  } finally {
+    bleConnecting.value = false
+  }
+}
 
 // --- Mock KPIs (will be replaced by backend) ---
 const kpis: KpiItem[] = [
@@ -56,14 +75,8 @@ async function downloadPdf() {
   downloadingPdf.value = false
 }
 
-// --- Chart data (mock last 24 readings) ---
-const mockTimestamps = Array.from({ length: 20 }, (_, i) => {
-  const d = new Date()
-  d.setMinutes(d.getMinutes() - (19 - i) * 5)
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-})
-
-const chartOptions = ref({
+// --- Chart data (live from BLE history) ---
+const chartOptions = computed(() => ({
   chart: {
     type: 'line',
     toolbar: { show: false },
@@ -79,7 +92,7 @@ const chartOptions = ref({
     xaxis: { lines: { show: false } },
   },
   xaxis: {
-    categories: mockTimestamps,
+    categories: bioStore.historyTimestamps,
     labels: {
       style: { colors: '#b0bec5', fontSize: '11px' },
       rotate: 0,
@@ -122,21 +135,12 @@ const chartOptions = ref({
     style: { fontSize: '12px' },
   },
   markers: { size: 0, hover: { size: 5 } },
-})
+}))
 
-const chartSeries = ref([
-  {
-    name: 'SpO2',
-    data: [97, 98, 97, 98, 99, 98, 97, 98, 98, 99, 98, 97, 98, 97, 98, 99, 98, 98, 97, 98],
-  },
-  {
-    name: 'Heart Rate',
-    data: [70, 73, 75, 72, 68, 71, 74, 70, 69, 72, 75, 73, 70, 71, 72, 70, 74, 72, 71, 72],
-  },
-  {
-    name: 'Temperature',
-    data: [36.5, 36.6, 36.6, 36.7, 36.6, 36.5, 36.6, 36.7, 36.6, 36.6, 36.5, 36.6, 36.7, 36.6, 36.6, 36.5, 36.6, 36.6, 36.7, 36.6],
-  },
+const chartSeries = computed(() => [
+  { name: 'SpO2',        data: bioStore.historySpo2      },
+  { name: 'Heart Rate',  data: bioStore.historyHeartRate },
+  { name: 'Temperature', data: bioStore.historyTemp      },
 ])
 
 const formattedDate = computed(() =>
@@ -152,14 +156,31 @@ const formattedDate = computed(() =>
         <h1>Dashboard</h1>
         <p>{{ formattedDate }} &nbsp;·&nbsp; Last updated {{ lastUpdated }}</p>
       </div>
-      <button class="pdf-btn" :disabled="downloadingPdf" @click="downloadPdf">
-        <i :class="downloadingPdf ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
-        {{ downloadingPdf ? 'Generating…' : 'Download PDF' }}
-      </button>
+      <div class="header-actions">
+        <button
+          class="ble-btn"
+          :class="{ connected: bioStore.bleConnected }"
+          :disabled="bleConnecting"
+          @click="toggleBle"
+        >
+          <i :class="bleConnecting ? 'pi pi-spin pi-spinner' : bioStore.bleConnected ? 'pi pi-wifi' : 'pi pi-bluetooth'" />
+          {{ bleConnecting ? 'Connecting…' : bioStore.bleConnected ? 'Disconnect' : 'Connect Device' }}
+        </button>
+        <button class="pdf-btn" :disabled="downloadingPdf" @click="downloadPdf">
+          <i :class="downloadingPdf ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
+          {{ downloadingPdf ? 'Generating…' : 'Download PDF' }}
+        </button>
+      </div>
     </div>
 
     <!-- Live Readings -->
-    <p class="section-title animate-section" style="--s-delay: 0.05s">Live Readings</p>
+    <p class="section-title animate-section" style="--s-delay: 0.05s">
+      Live Readings
+      <span v-if="bioStore.bleConnected" class="finger-badge" :class="bioStore.fingerDetected ? 'on' : 'off'">
+        <i class="pi pi-circle-fill" />
+        {{ bioStore.fingerDetected ? 'Finger detected' : 'No finger' }}
+      </span>
+    </p>
     <div class="readings-grid">
       <div class="reading-wrap" style="--s-delay: 0.1s">
         <LiveReadingCard label="SpO2" :value="spo2" unit="%" status="normal" icon="pi pi-eye" :trend="0" />
@@ -217,6 +238,64 @@ const formattedDate = computed(() =>
   justify-content: space-between;
   align-items: flex-start;
 }
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ble-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 18px;
+  background: #f1f5f9;
+  color: #475569;
+  border: 1.5px solid #e2e8f0;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.ble-btn:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.ble-btn.connected {
+  background: #dcfce7;
+  color: #16a34a;
+  border-color: #86efac;
+}
+
+.ble-btn.connected:hover:not(:disabled) {
+  background: #bbf7d0;
+}
+
+.ble-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.finger-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  vertical-align: middle;
+}
+
+.finger-badge.on  { background: #dcfce7; color: #16a34a; }
+.finger-badge.off { background: #fef9c3; color: #a16207; }
 
 .pdf-btn {
   display: flex;
