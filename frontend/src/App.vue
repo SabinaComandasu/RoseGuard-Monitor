@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import AppSidebar from './components/layout/AppSidebar.vue'
 import FloatingChatButton from './components/FloatingChatButton.vue'
 import ChatPanel from './components/ChatPanel.vue'
+import WelcomeBackDialog from './components/WelcomeBackDialog.vue'
 import { useAuthStore } from './stores/auth'
 import { useUserStore } from './stores/user'
 
@@ -13,10 +14,22 @@ const auth = useAuthStore()
 const user = useUserStore()
 const chatOpen = ref(false)
 const sidebarOpen = ref(true)
+const showWelcome = ref(false)
 
-onMounted(() => {
+onMounted(async () => {
   if (auth.isAuthenticated) user.load().catch(() => {})
 })
+
+watch(() => auth.justLoggedIn, async (val) => {
+  if (!val) return
+  await user.load().catch(() => {})
+  showWelcome.value = true
+  auth.justLoggedIn = false
+})
+
+function closeWelcome() {
+  showWelcome.value = false
+}
 
 function logout() {
   auth.logout()
@@ -56,6 +69,7 @@ function logout() {
 
     <FloatingChatButton @toggle="chatOpen = !chatOpen" />
     <ChatPanel :open="chatOpen" @close="chatOpen = false" />
+    <WelcomeBackDialog v-if="showWelcome" @close="closeWelcome" />
   </template>
 </template>
 

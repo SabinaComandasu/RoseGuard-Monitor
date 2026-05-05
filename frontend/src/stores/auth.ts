@@ -10,14 +10,16 @@ interface AuthUser {
 const API = import.meta.env.VITE_API_URL || 'http://localhost:5032/api'
 
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem('token'))
-  const user  = ref<AuthUser | null>(JSON.parse(localStorage.getItem('user') || 'null'))
+  const token         = ref<string | null>(localStorage.getItem('token'))
+  const user          = ref<AuthUser | null>(JSON.parse(localStorage.getItem('user') || 'null'))
+  const justLoggedIn  = ref(false)
 
   const isAuthenticated = computed(() => !!token.value)
 
   function persist(t: string, u: AuthUser) {
-    token.value = t
-    user.value  = u
+    token.value       = t
+    user.value        = u
+    justLoggedIn.value = true
     localStorage.setItem('token', t)
     localStorage.setItem('user', JSON.stringify(u))
   }
@@ -66,5 +68,5 @@ export const useAuthStore = defineStore('auth', () => {
     clear()
   }
 
-  return { token, user, isAuthenticated, login, register, loginWithGoogle, logout }
+  return { token, user, isAuthenticated, justLoggedIn, login, register, loginWithGoogle, logout }
 })

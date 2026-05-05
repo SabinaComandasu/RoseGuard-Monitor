@@ -41,11 +41,16 @@ function animateTo(target: number) {
 }
 
 onMounted(() => {
-  if (props.value !== null) animateTo(props.value)
+  if (props.value !== null) displayValue.value = props.value
 })
 
-watch(() => props.value, (val) => {
-  if (val !== null) animateTo(val)
+watch(() => props.value, (val, oldVal) => {
+  if (val === null) return
+  if (oldVal === null) {
+    displayValue.value = val  // first appearance — snap, no count-up
+  } else {
+    animateTo(val)
+  }
 })
 
 function formatDisplay(val: number, target: number | null) {

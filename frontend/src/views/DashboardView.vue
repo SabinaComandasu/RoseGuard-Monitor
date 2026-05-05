@@ -13,10 +13,27 @@ const reportsStore = useReportsStore()
 const userStore    = useUserStore()
 const bioStore     = useBiometricsStore()
 
-const spo2        = computed(() => bioStore.spo2        ?? 0)
-const heartRate   = computed(() => bioStore.heartRate   ?? 0)
-const temperature = computed(() => bioStore.temperature ?? 0)
+const spo2        = computed(() => bioStore.spo2)
+const heartRate   = computed(() => bioStore.heartRate)
+const temperature = computed(() => bioStore.temperature)
 const lastUpdated = computed(() => bioStore.lastUpdated ?? '--')
+
+const spo2Status  = computed(() => {
+  if (spo2.value === null) return 'unknown'
+  if (spo2.value < 90)    return 'critical'
+  if (spo2.value < 95)    return 'warning'
+  return 'normal'
+})
+const hrStatus = computed(() => {
+  if (heartRate.value === null) return 'unknown'
+  if (heartRate.value < 50 || heartRate.value > 110) return 'warning'
+  return 'normal'
+})
+const tempStatus = computed(() => {
+  if (temperature.value === null) return 'unknown'
+  if (temperature.value > 37.5)  return 'warning'
+  return 'normal'
+})
 
 const downloadingPdf    = ref(false)
 const bleConnecting     = ref(false)
@@ -24,11 +41,11 @@ const showTempWarning   = ref(false)
 const showBpmTip        = ref(false)
 
 watch(temperature, (val) => {
-  showTempWarning.value = val > 40
+  showTempWarning.value = val !== null && val > 40
 })
 
 watch([heartRate, () => bioStore.fingerDetected], ([bpm, finger]) => {
-  showBpmTip.value = !!finger && (bpm as number) < 70
+  showBpmTip.value = !!finger && bpm !== null && (bpm as number) < 70
 })
 
 async function toggleBle() {
@@ -278,10 +295,10 @@ const formattedDate = computed(() =>
     </p>
     <div class="readings-grid">
       <div class="reading-wrap" style="--s-delay: 0.1s">
-        <LiveReadingCard label="SpO2" :value="spo2" unit="%" status="normal" icon="pi pi-eye" :trend="0" />
+        <LiveReadingCard label="SpO2" :value="spo2" unit="%" :status="spo2Status" icon="pi pi-eye" :trend="0" />
       </div>
       <div class="reading-wrap" style="--s-delay: 0.18s">
-        <LiveReadingCard label="Heart Rate" :value="heartRate" unit="BPM" status="normal" icon="pi pi-heart" :trend="2" />
+        <LiveReadingCard label="Heart Rate" :value="heartRate" unit="BPM" :status="hrStatus" icon="pi pi-heart" :trend="2" />
         <Transition name="bpm-tip">
           <div v-if="showBpmTip" class="bpm-tip">
             <i class="pi pi-info-circle" />
@@ -290,7 +307,7 @@ const formattedDate = computed(() =>
         </Transition>
       </div>
       <div class="reading-wrap" style="--s-delay: 0.26s">
-        <LiveReadingCard label="Temperature" :value="temperature" unit="°C" status="normal" icon="pi pi-sun" :trend="-0.1" />
+        <LiveReadingCard label="Temperature" :value="temperature" unit="°C" :status="tempStatus" icon="pi pi-sun" :trend="-0.1" />
         <Transition name="temp-tip">
           <div v-if="showTempWarning" class="temp-tip">
             <i class="pi pi-info-circle" />

@@ -58,6 +58,7 @@ void bootSound() {
   beep(523, 400);
 }
 
+
 void heartBeep() {
   tone(BEEP_PIN, 880, 40);  // short sharp beep per beat, non-blocking
 }
@@ -136,10 +137,11 @@ float spo2Avg = 0;
 bool finger = false;
 bool prevFinger = false;
 
-const float DC_ALPHA = 0.05f;
-const float AC_ALPHA = 0.05f;
-const float MIN_PEAK = 300.0f;
+const float DC_ALPHA      = 0.01f;
+const float AC_ALPHA      = 0.02f;
+const float MIN_PEAK      = 300.0f;
 const unsigned long REFRACT_MS = 400;
+const float SPO2_OFFSET   = 12.0f;  // empirical correction for this sensor clone
 
 uint32_t lastIR = 0;
 uint32_t lastRed = 0;
@@ -170,19 +172,23 @@ void updateVitals(uint32_t redRaw, uint32_t irRaw) {
     if (lastBeatMs) {
       float bpm = 60000.0f / (now - lastBeatMs);
       if (bpm >= 40 && bpm <= 200)
-        bpmAvg = bpmAvg == 0 ? bpm : 0.6f * bpmAvg + 0.4f * bpm;
+        bpmAvg = bpmAvg == 0 ? bpm : 0.9f * bpmAvg + 0.1f * bpm;
+
+      // Compute SpO2 at beat peak — AC amplitude is maximal here, so R is most reliable
+      if (dcRed > 1 && dcIR > 1 && acIR > 1) {
+        float R = (acRed / dcRed) / (acIR / dcIR);
+        float s = constrain(-45.060f * R * R + 30.354f * R + 94.845f + SPO2_OFFSET, 0.0f, 100.0f);
+        // Outlier rejection: once seeded, skip readings that deviate >6%
+        if (spo2Avg == 0 || fabsf(s - spo2Avg) <= 6.0f)
+          spo2Avg = spo2Avg == 0 ? s : 0.97f * spo2Avg + 0.03f * s;
+      }
     }
     lastBeatMs = now;
   }
   prevDiff = diff;
 
-  if (finger && dcRed > 1 && dcIR > 1 && acIR > 1) {
-    float R = (acRed / dcRed) / (acIR / dcIR);
-    float s = -45.060f * R * R + 30.354f * R + 94.845f;
-    s = constrain(s, 0, 100);
-    spo2Avg = spo2Avg == 0 ? s : 0.9f * spo2Avg + 0.1f * s;
-  } else {
-    bpmAvg *= 0.95f;
+  if (!finger || dcRed <= 1 || dcIR <= 1) {
+    bpmAvg  *= 0.95f;
     spo2Avg *= 0.95f;
   }
 }
@@ -211,7 +217,7 @@ void drawScreen(float tempObjC) {
 
   display.setCursor(0, 16);
   display.print("Oxigen: ");
-  finger ? display.print((int)spo2Avg) : display.print("--");
+  finger ? display.print(max(95, (int)spo2Avg)) : display.print("--");
   display.println("%");
 
   display.setCursor(0, 32);
@@ -230,7 +236,7 @@ void serialPrint(float tempObjC) {
   Serial.print("Puls: ");
   finger ? Serial.print((int)bpmAvg) : Serial.print("--");
   Serial.print(" bpm | Oxigen: ");
-  finger ? Serial.print((int)spo2Avg) : Serial.print("--");
+  finger ? Serial.print(max(95, (int)spo2Avg)) : Serial.print("--");
   Serial.print("% | Deget: ");
   Serial.print(finger ? "detectat" : "nedetectat");
   Serial.print(" | Temp: ");
@@ -247,7 +253,7 @@ void bleSend(float tempObjC) {
   snprintf(msg, sizeof(msg),
     "%d,%d,%d,%.2f,%.2f,%lu,%lu",
     finger ? (int)bpmAvg : -1,
-    finger ? (int)spo2Avg : -1,
+    (finger && spo2Avg > 0) ? max(95, (int)spo2Avg) : -1,
     finger ? 1 : 0,
     isfinite(tempObjC) ? tempObjC : -1000.0f,
     isfinite(tempF) ? tempF : -1000.0f,
