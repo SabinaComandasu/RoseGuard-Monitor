@@ -136,10 +136,10 @@ float spo2Avg = 0;
 bool finger = false;
 bool prevFinger = false;
 
-const float DC_ALPHA = 0.01f;
+const float DC_ALPHA = 0.05f;
 const float AC_ALPHA = 0.05f;
-const float MIN_PEAK = 20.0f;
-const unsigned long REFRACT_MS = 300;
+const float MIN_PEAK = 300.0f;
+const unsigned long REFRACT_MS = 400;
 
 uint32_t lastIR = 0;
 uint32_t lastRed = 0;
@@ -170,7 +170,7 @@ void updateVitals(uint32_t redRaw, uint32_t irRaw) {
     if (lastBeatMs) {
       float bpm = 60000.0f / (now - lastBeatMs);
       if (bpm >= 40 && bpm <= 200)
-        bpmAvg = bpmAvg == 0 ? bpm : 0.8f * bpmAvg + 0.2f * bpm;
+        bpmAvg = bpmAvg == 0 ? bpm : 0.6f * bpmAvg + 0.4f * bpm;
     }
     lastBeatMs = now;
   }
@@ -178,7 +178,7 @@ void updateVitals(uint32_t redRaw, uint32_t irRaw) {
 
   if (finger && dcRed > 1 && dcIR > 1 && acIR > 1) {
     float R = (acRed / dcRed) / (acIR / dcIR);
-    float s = 110.0f - 25.0f * R;
+    float s = -45.060f * R * R + 30.354f * R + 94.845f;
     s = constrain(s, 0, 100);
     spo2Avg = spo2Avg == 0 ? s : 0.9f * spo2Avg + 0.1f * s;
   } else {
@@ -395,18 +395,27 @@ void loop() {
     mlxObjC = isfinite(t) ? t : NAN;
   }
 
-  // MAX read
-  if (max_fifoCount() > 0) {
+  // MAX read — drain all available samples each loop
+  int nSamples = max_fifoCount();
+  for (int i = 0; i < nSamples; i++) {
     uint8_t d[6];
-    if (max_rN(REG_FIFO_DATA, d, 6))
-      updateVitals(sample18(d), sample18(d + 3));
+    if (!max_rN(REG_FIFO_DATA, d, 6)) break;
+    updateVitals(sample18(d), sample18(d + 3));
   }
 
   if (finger && !prevFinger) {
+    bpmAvg  = 0;
+    spo2Avg = 0;
+    dcIR    = 0;
+    dcRed   = 0;
     successSound();
     lastBeepMs = millis() + 900;  // delay before first beep
   }
-  if (!finger && prevFinger) removeSound();
+  if (!finger && prevFinger) {
+    bpmAvg  = 0;
+    spo2Avg = 0;
+    removeSound();
+  }
   if (finger && (millis() - lastBeepMs > 800)) {
     tone(BEEP_PIN, 880, 60);
     lastBeepMs = millis();
