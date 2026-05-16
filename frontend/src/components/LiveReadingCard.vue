@@ -54,7 +54,7 @@ watch(() => props.value, (val, oldVal) => {
 })
 
 function formatDisplay(val: number, target: number | null) {
-  if (target === null) return '—'
+  if (target === null) return '0'
   return Number.isInteger(target) ? val.toString() : val.toFixed(1)
 }
 </script>
@@ -70,7 +70,7 @@ function formatDisplay(val: number, target: number | null) {
 
     <div class="card-value-row">
       <span class="card-value">{{ formatDisplay(displayValue, value) }}</span>
-      <span class="card-unit">{{ value !== null ? unit : '' }}</span>
+      <span class="card-unit">{{ unit }}</span>
     </div>
 
     <div class="card-footer">

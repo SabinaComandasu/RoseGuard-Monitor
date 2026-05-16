@@ -15,6 +15,7 @@ export interface KpiItem {
   status: HealthStatus
   icon: string
   description: string
+  tooltip?: string
 }
 
 export interface UserProfile {

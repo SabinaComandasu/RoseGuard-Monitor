@@ -8,6 +8,7 @@ defineProps<{
   status: HealthStatus
   icon: string
   description: string
+  tooltip?: string
 }>()
 
 const statusLabel: Record<HealthStatus, string> = {
@@ -24,7 +25,10 @@ const statusLabel: Record<HealthStatus, string> = {
       <div class="kpi-icon-wrap" :class="status">
         <i :class="icon" />
       </div>
-      <span class="status-badge" :class="status">{{ statusLabel[status] }}</span>
+      <span class="badge-wrap">
+        <span class="status-badge" :class="status">{{ statusLabel[status] }}</span>
+        <span v-if="tooltip" class="badge-tooltip">{{ tooltip }}</span>
+      </span>
     </div>
 
     <div class="kpi-value-row">
@@ -77,6 +81,47 @@ const statusLabel: Record<HealthStatus, string> = {
 .kpi-icon-wrap.warning { background: var(--color-warning-bg); color: var(--color-warning); }
 .kpi-icon-wrap.critical{ background: var(--color-critical-bg);color: var(--color-critical); }
 .kpi-icon-wrap.unknown { background: var(--color-unknown-bg); color: var(--color-unknown); }
+
+.badge-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.badge-tooltip {
+  position: absolute;
+  top: calc(100% + 7px);
+  left: 0;
+  background: #475569;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.6;
+  padding: 9px 14px;
+  border-radius: 8px;
+  width: max-content;
+  max-width: 320px;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  z-index: 50;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.badge-tooltip::before {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 10px;
+  border: 5px solid transparent;
+  border-bottom-color: #475569;
+}
+
+.badge-wrap:hover .badge-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
 
 .kpi-value-row {
   display: flex;

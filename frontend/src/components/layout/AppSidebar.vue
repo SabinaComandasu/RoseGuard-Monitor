@@ -19,7 +19,7 @@ const initials = computed(() => {
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: 'pi pi-th-large' },
   { path: '/profile',   label: 'Profile',   icon: 'pi pi-user' },
-  { path: '/history',   label: 'History',   icon: 'pi pi-chart-line' },
+  { path: '/history',   label: 'AI Health',  icon: 'pi pi-sparkles' },
   { path: '/reports',   label: 'Reports',   icon: 'pi pi-file-pdf' },
 ]
 </script>

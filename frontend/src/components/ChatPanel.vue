@@ -1,21 +1,34 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import { marked } from 'marked'
+import { useRouter } from 'vue-router'
 import { useChatStore } from '@/stores/chat'
 import { useBiometricsStore } from '@/stores/biometrics'
 import { useUserStore } from '@/stores/user'
+import { useTrendsStore } from '@/stores/trends'
+import { useHealthAdviceStore } from '@/stores/healthAdvice'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ close: [] }>()
 
+const router = useRouter()
 const chat = useChatStore()
 const biometrics = useBiometricsStore()
 const user = useUserStore()
+const trends = useTrendsStore()
+const healthAdvice = useHealthAdviceStore()
+
+function openHealthAnalysis() {
+  emit('close')
+  router.push({ path: '/history', query: { autoAnalyze: '1' } })
+}
 const input = ref('')
 const messagesEl = ref<HTMLElement | null>(null)
 const isTyping = ref(false)
 const error = ref('')
 const historyOpen = ref(false)
+const renamingId = ref<string | null>(null)
+const renameValue = ref('')
 
 const GROQ_KEY = import.meta.env.VITE_GROQ_KEY
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
@@ -42,24 +55,36 @@ function scrollToBottom() {
 watch(() => chat.messages.length, scrollToBottom)
 watch(() => props.open, (val) => { if (val) scrollToBottom() })
 
-async function send() {
-  const text = input.value.trim()
+async function startAdviceConversation(topic: 'bmi' | 'sleep' | 'activity') {
+  const prompts: Record<string, string> = {
+    bmi:      `My BMI is ${user.bmi?.toFixed(1)}. I'm ${user.heightCm} cm tall and weigh ${user.weightKg} kg. Please give me personalised, actionable advice to reach and maintain a healthy weight.`,
+    sleep:    `I currently sleep about ${user.sleepHours} hours per night. Please give me practical tips to improve my sleep quality and reach the recommended 7–9 hours.`,
+    activity: `I have a sedentary lifestyle and don't exercise regularly. Please give me a beginner-friendly plan to become more active, starting small and building up gradually.`,
+  }
+  chat.newConversation()
+  await send(prompts[topic])
+}
+
+async function send(overrideText?: string) {
+  const text = (typeof overrideText === 'string' ? overrideText : null) ?? input.value.trim()
   if (!text) return
 
   if (!chat.activeConversation) chat.newConversation()
 
   error.value = ''
-  input.value = ''
+  if (!overrideText) input.value = ''
   chat.addMessage({ role: 'user', content: text, timestamp: new Date().toISOString() })
 
   isTyping.value = true
   scrollToBottom()
 
   try {
-    const history = chat.messages.map(m => ({
-      role: m.role === 'assistant' ? 'assistant' : 'user',
-      content: m.content,
-    }))
+    const history = chat.messages
+      .filter(m => typeof m.content === 'string' && m.content.length > 0)
+      .map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content,
+      }))
 
     const res = await fetch(GROQ_URL, {
       method: 'POST',
@@ -68,7 +93,7 @@ async function send() {
         'Authorization': `Bearer ${GROQ_KEY}`,
       },
       body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
+        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
         messages: [
           { role: 'system', content: systemContext() },
           ...history,
@@ -114,6 +139,30 @@ function selectConversation(id: string) {
   chat.switchConversation(id)
   scrollToBottom()
 }
+
+function startRename(conv: { id: string; title: string }, e: Event) {
+  e.stopPropagation()
+  renamingId.value = conv.id
+  renameValue.value = conv.title
+  nextTick(() => {
+    const el = document.getElementById(`rename-${conv.id}`)
+    el?.focus()
+    ;(el as HTMLInputElement)?.select()
+  })
+}
+
+function commitRename(id: string) {
+  try {
+    chat.renameConversation(id, renameValue.value)
+  } finally {
+    renamingId.value = null
+  }
+}
+
+function onRenameKeydown(e: KeyboardEvent, id: string) {
+  if (e.key === 'Enter') { e.preventDefault(); commitRename(id) }
+  if (e.key === 'Escape') { renamingId.value = null }
+}
 </script>
 
 <template>
@@ -144,18 +193,38 @@ function selectConversation(id: string) {
               v-for="conv in chat.conversations"
               :key="conv.id"
               class="history-item"
-              :class="{ active: conv.id === chat.activeId }"
-              @click="selectConversation(conv.id)"
+              :class="{ active: conv.id === chat.activeId, renaming: renamingId === conv.id }"
+              @click="renamingId !== conv.id && selectConversation(conv.id)"
             >
-              <div class="history-item-title">{{ conv.title }}</div>
-              <div class="history-item-meta">{{ formatDate(conv.createdAt) }}</div>
-              <button
-                class="delete-btn"
-                @click.stop="chat.deleteConversation(conv.id)"
-                title="Delete"
-              >
-                <i class="pi pi-trash" />
-              </button>
+              <template v-if="renamingId === conv.id">
+                <div class="rename-row">
+                  <input
+                    :id="`rename-${conv.id}`"
+                    v-model="renameValue"
+                    class="rename-input"
+                    @click.stop
+                    @keydown="onRenameKeydown($event, conv.id)"
+                  />
+                  <button class="rename-action-btn confirm" @click.stop="commitRename(conv.id)" title="Save">
+                    <i class="pi pi-check" />
+                  </button>
+                  <button class="rename-action-btn cancel" @click.stop="renamingId = null" title="Cancel">
+                    <i class="pi pi-times" />
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <div class="history-item-title">{{ conv.title }}</div>
+                <div class="history-item-meta">{{ formatDate(conv.createdAt) }}</div>
+                <div class="history-item-actions">
+                  <button class="action-btn" @click.stop="startRename(conv, $event)" title="Rename">
+                    <i class="pi pi-pencil" />
+                  </button>
+                  <button class="action-btn delete-btn" @click.stop="chat.deleteConversation(conv.id)" title="Delete">
+                    <i class="pi pi-trash" />
+                  </button>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -190,6 +259,50 @@ function selectConversation(id: string) {
           <div v-if="chat.messages.length === 0 && !isTyping" class="empty-chat">
             <div class="empty-icon"><i class="pi pi-comments" /></div>
             <p>Ask me anything about your health data, readings, or wellness tips.</p>
+
+            <button v-if="trends.hasChartData" class="suggest-card" @click="openHealthAnalysis">
+              <div class="suggest-icon-wrap">
+                <i class="pi pi-sparkles" />
+              </div>
+              <div class="suggest-body">
+                <div class="suggest-title">AI Health Recommendations</div>
+                <div class="suggest-desc">Get personalised insights on your SpO₂, heart rate &amp; temperature readings</div>
+              </div>
+              <i class="pi pi-arrow-right suggest-arrow" />
+            </button>
+
+            <button v-if="healthAdvice.bmiUnlocked" class="suggest-card bmi-card" @click="startAdviceConversation('bmi')">
+              <div class="suggest-icon-wrap bmi-icon-wrap">
+                <i class="pi pi-user" />
+              </div>
+              <div class="suggest-body">
+                <div class="suggest-title">Weight &amp; BMI Advice</div>
+                <div class="suggest-desc">Personalised guidance to reach a healthy weight for your height</div>
+              </div>
+              <i class="pi pi-arrow-right suggest-arrow bmi-arrow" />
+            </button>
+
+            <button v-if="healthAdvice.sleepUnlocked" class="suggest-card sleep-card" @click="startAdviceConversation('sleep')">
+              <div class="suggest-icon-wrap sleep-icon-wrap">
+                <i class="pi pi-moon" />
+              </div>
+              <div class="suggest-body">
+                <div class="suggest-title">Sleep Improvement Tips</div>
+                <div class="suggest-desc">Practical steps to improve your sleep quality and hit 7–9 hours a night</div>
+              </div>
+              <i class="pi pi-arrow-right suggest-arrow sleep-arrow" />
+            </button>
+
+            <button v-if="healthAdvice.activityUnlocked" class="suggest-card activity-card" @click="startAdviceConversation('activity')">
+              <div class="suggest-icon-wrap activity-icon-wrap">
+                <i class="pi pi-bolt" />
+              </div>
+              <div class="suggest-body">
+                <div class="suggest-title">Active Lifestyle Guide</div>
+                <div class="suggest-desc">A beginner-friendly plan to move more and break out of a sedentary routine</div>
+              </div>
+              <i class="pi pi-arrow-right suggest-arrow activity-arrow" />
+            </button>
           </div>
 
           <div
@@ -233,7 +346,7 @@ function selectConversation(id: string) {
             rows="1"
             @keydown="onKeydown"
           />
-          <button class="send-btn" :disabled="!input.trim()" @click="send">
+          <button class="send-btn" :disabled="!input.trim()" @click="send()">
             <i class="pi pi-send" />
           </button>
         </div>
@@ -344,7 +457,7 @@ function selectConversation(id: string) {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding-right: 20px;
+  padding-right: 52px;
 }
 
 .history-item-meta {
@@ -353,11 +466,20 @@ function selectConversation(id: string) {
   margin-top: 2px;
 }
 
-.delete-btn {
+.history-item-actions {
   position: absolute;
-  right: 6px;
+  right: 4px;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.history-item:hover .history-item-actions { opacity: 1; }
+
+.action-btn {
   width: 22px;
   height: 22px;
   border: none;
@@ -369,12 +491,57 @@ function selectConversation(id: string) {
   cursor: pointer;
   border-radius: 4px;
   font-size: 11px;
-  opacity: 0;
-  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
-.history-item:hover .delete-btn { opacity: 1; }
-.delete-btn:hover { background: var(--color-critical-bg); color: var(--color-critical); }
+.action-btn:hover { background: var(--color-surface); color: var(--color-text-primary); }
+.action-btn.delete-btn:hover { background: var(--color-critical-bg); color: var(--color-critical); }
+
+.rename-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.rename-input {
+  flex: 1;
+  min-width: 0;
+  border: 1.5px solid var(--color-primary);
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 12.5px;
+  font-family: inherit;
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  outline: none;
+}
+
+.rename-action-btn {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.rename-action-btn.confirm {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+}
+.rename-action-btn.confirm:hover { background: rgba(16, 185, 129, 0.25); }
+
+.rename-action-btn.cancel {
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+.rename-action-btn.cancel:hover { background: var(--color-critical-bg); color: var(--color-critical); }
 
 /* ── Chat main ────────────────────────────────────────────── */
 .chat-main {
@@ -508,6 +675,64 @@ function selectConversation(id: string) {
   font-size: 13px;
   max-width: 240px;
   line-height: 1.5;
+}
+
+.suggest-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  max-width: 300px;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.07), rgba(168, 85, 247, 0.05));
+  border: 1px solid rgba(124, 58, 237, 0.22);
+  border-radius: var(--radius-sm);
+  padding: 13px 14px;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  margin-top: 4px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.suggest-card:hover {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.13), rgba(168, 85, 247, 0.1));
+  border-color: rgba(124, 58, 237, 0.38);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.15);
+}
+
+.suggest-icon-wrap {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.suggest-body { flex: 1; min-width: 0; }
+
+.suggest-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-text-primary);
+}
+
+.suggest-desc {
+  font-size: 11px;
+  color: var(--color-text-secondary);
+  margin-top: 2px;
+  line-height: 1.45;
+}
+
+.suggest-arrow {
+  color: #7c3aed;
+  font-size: 12px;
+  flex-shrink: 0;
 }
 
 .message-row {
@@ -676,4 +901,41 @@ function selectConversation(id: string) {
   opacity: 0.4;
   cursor: default;
 }
+
+/* ── Advice card variants ─────────────────────────────────── */
+.bmi-card {
+  background: linear-gradient(135deg, rgba(233, 30, 140, 0.07), rgba(201, 24, 111, 0.04));
+  border-color: rgba(233, 30, 140, 0.22);
+}
+.bmi-card:hover {
+  background: linear-gradient(135deg, rgba(233, 30, 140, 0.13), rgba(201, 24, 111, 0.09));
+  border-color: rgba(233, 30, 140, 0.38);
+  box-shadow: 0 4px 14px rgba(233, 30, 140, 0.14);
+}
+.bmi-icon-wrap { background: linear-gradient(135deg, #e91e8c, #c9186f); }
+.bmi-arrow     { color: #e91e8c; }
+
+.sleep-card {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.07), rgba(79, 70, 229, 0.04));
+  border-color: rgba(99, 102, 241, 0.22);
+}
+.sleep-card:hover {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.13), rgba(79, 70, 229, 0.09));
+  border-color: rgba(99, 102, 241, 0.38);
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.14);
+}
+.sleep-icon-wrap { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+.sleep-arrow     { color: #6366f1; }
+
+.activity-card {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.07), rgba(5, 150, 105, 0.04));
+  border-color: rgba(16, 185, 129, 0.22);
+}
+.activity-card:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.13), rgba(5, 150, 105, 0.09));
+  border-color: rgba(16, 185, 129, 0.38);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.14);
+}
+.activity-icon-wrap { background: linear-gradient(135deg, #10b981, #059669); }
+.activity-arrow     { color: #10b981; }
 </style>

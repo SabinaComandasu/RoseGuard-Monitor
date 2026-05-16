@@ -61,6 +61,14 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  function renameConversation(id: string, title: string) {
+    const idx = conversations.value.findIndex(c => c.id === id)
+    if (idx !== -1) {
+      const trimmed = title.trim()
+      if (trimmed) conversations.value.splice(idx, 1, { ...conversations.value[idx], title: trimmed })
+    }
+  }
+
   function addMessage(message: ChatMessage) {
     if (!activeConversation.value) newConversation()
     const conv = activeConversation.value!
@@ -80,6 +88,7 @@ export const useChatStore = defineStore('chat', () => {
     newConversation,
     switchConversation,
     deleteConversation,
+    renameConversation,
     addMessage,
   }
 })

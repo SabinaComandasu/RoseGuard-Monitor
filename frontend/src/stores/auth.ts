@@ -31,34 +31,34 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('user')
   }
 
+  async function authFetch(url: string, body: object): Promise<Response> {
+    try {
+      return await fetch(url, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(body),
+      })
+    } catch {
+      throw new Error('Could not reach the server. Please check your connection.')
+    }
+  }
+
   async function login(email: string, password: string) {
-    const res = await fetch(`${API}/auth/login`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email, password }),
-    })
+    const res  = await authFetch(`${API}/auth/login`, { email, password })
     const data = await res.json()
     if (!res.ok) throw new Error(data.message ?? 'Login failed.')
     persist(data.token, { email: data.email, firstName: data.firstName, lastName: data.lastName })
   }
 
   async function register(email: string, password: string, firstName: string, lastName: string) {
-    const res = await fetch(`${API}/auth/register`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ email, password, firstName, lastName }),
-    })
+    const res  = await authFetch(`${API}/auth/register`, { email, password, firstName, lastName })
     const data = await res.json()
     if (!res.ok) throw new Error(data.message ?? 'Registration failed.')
     persist(data.token, { email: data.email, firstName: data.firstName, lastName: data.lastName })
   }
 
   async function loginWithGoogle(idToken: string) {
-    const res = await fetch(`${API}/auth/google`, {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ idToken }),
-    })
+    const res  = await authFetch(`${API}/auth/google`, { idToken })
     const data = await res.json()
     if (!res.ok) throw new Error(data.message ?? 'Google sign-in failed.')
     persist(data.token, { email: data.email, firstName: data.firstName, lastName: data.lastName })

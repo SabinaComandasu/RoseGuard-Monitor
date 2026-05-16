@@ -18,12 +18,110 @@ const STATUS_LABELS: Record<string, string> = {
   normal: 'Normal', warning: 'Warning', critical: 'Critical', unknown: 'No Data',
 }
 
+function ascii(str: string): string {
+  return str.normalize("NFD").replace(new RegExp("[̀-ͯ]", "g"), "")
+}
+
+function stripMarkdown(text: string): string {
+  return text
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/^\s*[-*+]\s+/gm, '• ')
+    .replace(/^\s*(\d+)\.\s+/gm, '$1. ')
+    .trim()
+}
+
+interface TrendSeries {
+  values: number[]
+  labels: string[]
+}
+
 interface PdfData {
-  spo2: number | null
-  heartRate: number | null
-  temperature: number | null
   kpis: KpiItem[]
   userName: string
+  trends?: {
+    spo2: TrendSeries
+    hr:   TrendSeries
+    temp: TrendSeries
+  }
+  chartImages?: {
+    spo2?: string
+    hr?:   string
+    temp?: string
+  }
+  aiRecommendation?: string
+}
+
+function drawTrendCard(
+  doc: jsPDF,
+  x: number, y: number, w: number, h: number,
+  label: string, unit: string, decimals: number,
+  color: [number, number, number],
+  series: TrendSeries,
+  yMin: number, yMax: number,
+) {
+  doc.setFillColor(...LIGHT)
+  doc.setDrawColor(252, 228, 236)
+  doc.roundedRect(x, y, w, h, 3, 3, 'FD')
+
+  doc.setFillColor(...color)
+  doc.roundedRect(x, y, w, 2.5, 1, 1, 'F')
+
+  doc.setTextColor(...GRAY)
+  doc.setFontSize(6.5)
+  doc.setFont('helvetica', 'bold')
+  doc.text(label.toUpperCase(), x + 5, y + 9)
+
+  if (series.values.length === 0) {
+    doc.setTextColor(...GRAY)
+    doc.setFontSize(7)
+    doc.setFont('helvetica', 'italic')
+    doc.text('No measurements taken', x + w / 2, y + h / 2 + 2, { align: 'center' })
+    return
+  }
+
+  const fmt = (v: number) => decimals > 0 ? v.toFixed(decimals) : String(Math.round(v))
+  const last = series.values[series.values.length - 1]
+  const avg  = series.values.reduce((a, b) => a + b, 0) / series.values.length
+  const min  = Math.min(...series.values)
+  const max  = Math.max(...series.values)
+
+  doc.setTextColor(...DARK)
+  doc.setFontSize(16)
+  doc.setFont('helvetica', 'bold')
+  doc.text(`${fmt(last)}${unit}`, x + 5, y + 21)
+
+  doc.setTextColor(...GRAY)
+  doc.setFontSize(6)
+  doc.setFont('helvetica', 'normal')
+  doc.text(`avg ${fmt(avg)}  |  min ${fmt(min)}  max ${fmt(max)}${unit}`, x + 5, y + 27)
+
+  const cx = x + 4
+  const cy = y + 31
+  const cw = w - 8
+  const ch = 12
+  const range = Math.max(yMax - yMin, 1)
+
+  const pts = series.values.map((v, i) => ({
+    px: cx + (i / Math.max(series.values.length - 1, 1)) * cw,
+    py: cy + ch - Math.min(ch, Math.max(0, ((v - yMin) / range) * ch)),
+  }))
+
+  doc.setDrawColor(...color)
+  doc.setLineWidth(0.8)
+  for (let i = 1; i < pts.length; i++) {
+    doc.line(pts[i - 1].px, pts[i - 1].py, pts[i].px, pts[i].py)
+  }
+
+  doc.setFillColor(...color)
+  pts.forEach(p => doc.circle(p.px, p.py, 0.8, 'F'))
+
+  doc.setTextColor(...GRAY)
+  doc.setFontSize(5.5)
+  doc.setFont('helvetica', 'italic')
+  doc.text(`${series.values.length} readings`, x + w - 4, y + h - 3, { align: 'right' })
 }
 
 export function generateDashboardPdf(data: PdfData): { doc: jsPDF; sizeKb: number } {
@@ -48,7 +146,7 @@ export function generateDashboardPdf(data: PdfData): { doc: jsPDF; sizeKb: numbe
   doc.text('Health Dashboard Report', 15, 26)
 
   if (data.userName) {
-    doc.text(`Patient: ${data.userName}`, 15, 34)
+    doc.text(`Patient: ${ascii(data.userName)}`, 15, 34)
   }
 
   const now = new Date()
@@ -58,118 +156,233 @@ export function generateDashboardPdf(data: PdfData): { doc: jsPDF; sizeKb: numbe
 
   let y = 57
 
-  // ── Section: Live Readings ──────────────────────────────────
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...GRAY)
-  doc.text('LIVE READINGS', 15, y)
-  y += 5
-
-  const readings = [
-    { label: 'SpO2',        value: data.spo2        !== null ? `${data.spo2}%`          : '—' },
-    { label: 'Heart Rate',  value: data.heartRate   !== null ? `${data.heartRate} BPM`  : '—' },
-    { label: 'Temperature', value: data.temperature !== null ? `${data.temperature}°C`  : '—' },
-  ]
-
-  const cardW = 57
-  const cardH = 28
-
-  readings.forEach((r, i) => {
-    const x = 15 + i * (cardW + 5)
-
-    doc.setFillColor(...LIGHT)
-    doc.setDrawColor(252, 228, 236)
-    doc.roundedRect(x, y, cardW, cardH, 3, 3, 'FD')
-
-    // pink top accent
-    doc.setFillColor(...PINK)
-    doc.roundedRect(x, y, cardW, 2.5, 1, 1, 'F')
-
+  // ── Section: Metric Trends ──────────────────────────────────
+  if (data.trends || data.chartImages) {
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
     doc.setTextColor(...GRAY)
-    doc.setFontSize(6.5)
-    doc.setFont('helvetica', 'bold')
-    doc.text(r.label.toUpperCase(), x + 5, y + 9)
+    doc.text('METRIC TRENDS', 15, y)
+    y += 6
 
-    doc.setTextColor(...DARK)
-    doc.setFontSize(16)
-    doc.setFont('helvetica', 'bold')
-    doc.text(r.value, x + 5, y + 22)
-  })
+    const HR_COLOR:   [number, number, number] = [244, 67,  54]
+    const TEMP_COLOR: [number, number, number] = [245, 158, 11]
 
-  y += cardH + 12
+    if (data.chartImages) {
+      // Full-width chart images stacked vertically
+      const chartMetas = [
+        { key: 'spo2' as const, label: 'SpO2',        unit: '%',    color: PINK,       series: data.trends?.spo2, decimals: 0, yMin: 90, yMax: 100 },
+        { key: 'hr'   as const, label: 'Heart Rate',  unit: ' BPM', color: HR_COLOR,   series: data.trends?.hr,   decimals: 0, yMin: 50, yMax: 150 },
+        { key: 'temp' as const, label: 'Temperature', unit: '°C', color: TEMP_COLOR, series: data.trends?.temp, decimals: 1, yMin: 20, yMax: 40  },
+      ]
+
+      for (const m of chartMetas) {
+        const imgURI = data.chartImages[m.key]
+        const vals   = m.series?.values ?? []
+
+        // Colored header row for this metric
+        doc.setFillColor(...m.color)
+        doc.rect(15, y, 180, 7, 'F')
+        doc.setTextColor(...WHITE)
+        doc.setFontSize(7)
+        doc.setFont('helvetica', 'bold')
+        doc.text(m.label.toUpperCase(), 19, y + 4.8)
+
+        if (vals.length > 0) {
+          const fmt = (v: number) => m.decimals > 0 ? v.toFixed(m.decimals) : String(Math.round(v))
+          const avg = vals.reduce((a, b) => a + b, 0) / vals.length
+          const statsText = `avg ${fmt(avg)}   min ${fmt(Math.min(...vals))}   max ${fmt(Math.max(...vals))}${m.unit}   ${vals.length} readings`
+          doc.text(statsText, W - 17, y + 4.8, { align: 'right' })
+        } else {
+          doc.setFont('helvetica', 'italic')
+          doc.text('No data recorded', W - 17, y + 4.8, { align: 'right' })
+        }
+        y += 7
+
+        const panelH = 42
+        if (imgURI && vals.length > 0) {
+          doc.addImage(imgURI, 'PNG', 15, y, 180, panelH)
+        } else {
+          doc.setFillColor(...LIGHT)
+          doc.setDrawColor(252, 228, 236)
+          doc.rect(15, y, 180, panelH, 'FD')
+          doc.setTextColor(...GRAY)
+          doc.setFontSize(7)
+          doc.setFont('helvetica', 'italic')
+          doc.text('No measurements taken', W / 2, y + panelH / 2 + 1.5, { align: 'center' })
+        }
+        y += panelH + 5
+      }
+    } else if (data.trends) {
+      // Side-by-side sparkline cards (dashboard fallback)
+      const cardW = 57
+      const cardH = 50
+      drawTrendCard(doc, 15,          y, cardW, cardH, 'SpO2',        '%',    0, PINK,       data.trends.spo2,  90, 100)
+      drawTrendCard(doc, 15 + 62,     y, cardW, cardH, 'Heart Rate',  ' BPM', 0, HR_COLOR,   data.trends.hr,    50, 150)
+      drawTrendCard(doc, 15 + 62 * 2, y, cardW, cardH, 'Temperature', '°C',  1, TEMP_COLOR, data.trends.temp,  20, 40)
+      y += cardH + 12
+    }
+  }
 
   // ── Section: Health KPIs ────────────────────────────────────
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(...GRAY)
-  doc.text('HEALTH KPIs', 15, y)
-  y += 5
+  if (data.kpis.length > 0) {
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(...GRAY)
+    doc.text('HEALTH KPIs', 15, y)
+    y += 5
 
-  // Table header
-  doc.setFillColor(...DARK)
-  doc.rect(15, y, W - 30, 8, 'F')
-  doc.setTextColor(...WHITE)
-  doc.setFontSize(7.5)
-  doc.setFont('helvetica', 'bold')
-  doc.text('KPI',    22,       y + 5.3)
-  doc.text('Value',  125,      y + 5.3)
-  doc.text('Status', W - 20,  y + 5.3, { align: 'right' })
-  y += 8
+    doc.setFillColor(...DARK)
+    doc.rect(15, y, W - 30, 8, 'F')
+    doc.setTextColor(...WHITE)
+    doc.setFontSize(7.5)
+    doc.setFont('helvetica', 'bold')
+    doc.text('KPI',    22,      y + 5.3)
+    doc.text('Value',  125,     y + 5.3)
+    doc.text('Status', W - 20, y + 5.3, { align: 'right' })
+    y += 8
 
-  const rowH = 8.5
-  data.kpis.forEach((kpi, i) => {
-    if (i % 2 === 0) {
-      doc.setFillColor(...LIGHT)
-      doc.rect(15, y, W - 30, rowH, 'F')
-    } else {
-      doc.setFillColor(...WHITE)
-      doc.rect(15, y, W - 30, rowH, 'F')
+    const rowH = 8.5
+    data.kpis.forEach((kpi, i) => {
+      if (i % 2 === 0) {
+        doc.setFillColor(...LIGHT)
+        doc.rect(15, y, W - 30, rowH, 'F')
+      } else {
+        doc.setFillColor(...WHITE)
+        doc.rect(15, y, W - 30, rowH, 'F')
+      }
+
+      const sc = STATUS_COLORS[kpi.status] ?? STATUS_COLORS.unknown
+
+      doc.setFillColor(...sc)
+      doc.circle(20.5, y + rowH / 2, 1.4, 'F')
+
+      doc.setTextColor(...DARK)
+      doc.setFontSize(7.5)
+      doc.setFont('helvetica', 'normal')
+      doc.text(kpi.label, 24, y + 5.8)
+
+      const valStr = kpi.value !== null ? `${kpi.value}${kpi.unit ? ' ' + kpi.unit : ''}` : '—'
+      doc.text(valStr, 125, y + 5.8)
+
+      doc.setTextColor(...sc)
+      doc.setFont('helvetica', 'bold')
+      doc.text(STATUS_LABELS[kpi.status] ?? '', W - 20, y + 5.8, { align: 'right' })
+
+      doc.setDrawColor(252, 228, 236)
+      doc.line(15, y + rowH, W - 15, y + rowH)
+
+      y += rowH
+    })
+  }
+
+  // ── Section: AI Recommendation ──────────────────────────────
+  if (data.aiRecommendation) {
+    const PDARK:  [number, number, number] = [55,  10,  100]
+    const PMED:   [number, number, number] = [124, 58,  237]
+    const PLIGHT: [number, number, number] = [249, 246, 255]
+    const PSOFT:  [number, number, number] = [190, 160, 240]
+
+    const cX    = 15
+    const cW    = 180
+    const tX    = cX + 8          // text left edge (after accent bar + padding)
+    const tW    = cX + cW - tX - 5 // text wrap width: card right edge minus text left minus 5mm right padding
+    const lineH = 5
+
+    // Always start on a fresh page
+    doc.setDrawColor(...PINK); doc.line(15, 283, W - 15, 283)
+    doc.addPage()
+    doc.setFillColor(...DARK); doc.rect(0, 0, W, 20, 'F')
+    doc.setFillColor(...PINK); doc.rect(0, 20, W, 2, 'F')
+    doc.setTextColor(...WHITE); doc.setFontSize(9); doc.setFont('helvetica', 'bold')
+    doc.text('RoseGuard Monitor', 15, 13)
+    y = 28
+
+    // Split text AFTER setting the exact font that will be used for rendering
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal')
+    const stripped = stripMarkdown(data.aiRecommendation)
+    const lines    = doc.splitTextToSize(stripped, tW) as string[]
+
+    // Section label
+    doc.setFontSize(7); doc.setFont('helvetica', 'bold'); doc.setTextColor(...GRAY)
+    doc.text('AI HEALTH RECOMMENDATIONS', 15, y)
+    y += 5
+
+    // ── Card header ─────────────────────────────────────────
+    const hH = 14
+    doc.setFillColor(...PDARK)
+    doc.roundedRect(cX, y, cW, hH, 3, 3, 'F')
+    doc.rect(cX, y + hH - 3, cW, 3, 'F')           // square bottom corners
+
+    // Sparkle star (4-axis lines + white center dot)
+    const sx = cX + 9, sy = y + hH / 2
+    doc.setDrawColor(...PSOFT); doc.setLineWidth(0.65)
+    for (let a = 0; a < 4; a++) {
+      const angle = (a * Math.PI) / 4
+      doc.line(
+        sx + Math.cos(angle) * 3.2, sy + Math.sin(angle) * 3.2,
+        sx + Math.cos(angle + Math.PI) * 3.2, sy + Math.sin(angle + Math.PI) * 3.2,
+      )
+    }
+    doc.setFillColor(...WHITE); doc.circle(sx, sy, 1.1, 'F')
+
+    doc.setTextColor(...WHITE); doc.setFontSize(11); doc.setFont('helvetica', 'bold')
+    doc.text('Groq AI', cX + 17, y + 9.2)
+
+    doc.setTextColor(...PSOFT); doc.setFontSize(7.5); doc.setFont('helvetica', 'normal')
+    doc.text('Personalized Health Analysis', cX + 46, y + 9.2)
+
+    doc.setFillColor(...PMED)
+    doc.roundedRect(cX + cW - 24, y + 4, 20, 6, 1.5, 1.5, 'F')
+    doc.setTextColor(...WHITE); doc.setFontSize(5.5); doc.setFont('helvetica', 'bold')
+    doc.text('AI ANALYSIS', cX + cW - 14, y + 7.9, { align: 'center' })
+
+    y += hH
+
+    // ── Text body (paginated) ────────────────────────────────
+    let i = 0
+    const padTop = 5, padBot = 5
+
+    while (i < lines.length) {
+      const avail  = 275 - y - padTop - padBot
+      const maxL   = Math.max(1, Math.floor(avail / lineH))
+      const end    = Math.min(i + maxL, lines.length)
+      const chunk  = lines.slice(i, end)
+      const chunkH = padTop + chunk.length * lineH + padBot
+
+      doc.setFillColor(...PLIGHT); doc.rect(cX, y, cW, chunkH, 'F')
+      doc.setFillColor(...PMED);   doc.rect(cX, y, 3,  chunkH, 'F')
+
+      // Restore text font before drawing (font state may have changed above)
+      doc.setTextColor(20, 10, 40); doc.setFontSize(8.5); doc.setFont('helvetica', 'normal')
+      let ty = y + padTop + 3.5
+      for (const line of chunk) { doc.text(line, tX, ty); ty += lineH }
+
+      y += chunkH
+      i  = end
+
+      if (i < lines.length) {
+        doc.setDrawColor(...PINK); doc.line(15, 283, W - 15, 283)
+        doc.addPage()
+        doc.setFillColor(...DARK); doc.rect(0, 0, W, 16, 'F')
+        doc.setFillColor(...PINK); doc.rect(0, 16, W, 2, 'F')
+        doc.setTextColor(...WHITE); doc.setFontSize(8); doc.setFont('helvetica', 'bold')
+        doc.text('RoseGuard Monitor', 15, 11)
+        y = 24
+
+        doc.setFillColor(...PMED)
+        doc.roundedRect(cX, y, cW, 8, 2, 2, 'F')
+        doc.rect(cX, y + 5, cW, 3, 'F')
+        doc.setTextColor(...WHITE); doc.setFontSize(7); doc.setFont('helvetica', 'bold')
+        doc.text('Groq AI  —  continued', cX + 8, y + 5.5)
+        y += 8
+      }
     }
 
-    const sc = STATUS_COLORS[kpi.status] ?? STATUS_COLORS.unknown
-
-    // status dot
-    doc.setFillColor(...sc)
-    doc.circle(20.5, y + rowH / 2, 1.4, 'F')
-
-    doc.setTextColor(...DARK)
-    doc.setFontSize(7.5)
-    doc.setFont('helvetica', 'normal')
-    doc.text(kpi.label, 24, y + 5.8)
-
-    const valStr = kpi.value !== null ? `${kpi.value}${kpi.unit ? ' ' + kpi.unit : ''}` : '—'
-    doc.text(valStr, 125, y + 5.8)
-
-    doc.setTextColor(...sc)
-    doc.setFont('helvetica', 'bold')
-    doc.text(STATUS_LABELS[kpi.status] ?? '', W - 20, y + 5.8, { align: 'right' })
-
-    doc.setDrawColor(252, 228, 236)
-    doc.line(15, y + rowH, W - 15, y + rowH)
-
-    y += rowH
-  })
+  }
 
   // ── Footer ──────────────────────────────────────────────────
-  const footerY = 278
   doc.setDrawColor(...PINK)
-  doc.line(15, footerY, W - 15, footerY)
-
-  doc.setTextColor(...GRAY)
-  doc.setFontSize(6.5)
-  doc.setFont('helvetica', 'italic')
-  doc.text(
-    'This report is for informational purposes only and does not constitute medical advice.',
-    W / 2, footerY + 5, { align: 'center' }
-  )
-  doc.text(
-    'Please consult a qualified healthcare professional for medical decisions.',
-    W / 2, footerY + 9, { align: 'center' }
-  )
-
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(...GRAY)
-  doc.text('RoseGuard Monitor · Page 1 of 1', W / 2, 290, { align: 'center' })
+  doc.line(15, 283, W - 15, 283)
 
   const pdfOutput = doc.output('datauristring')
   const base64 = pdfOutput.split(',')[1]
@@ -204,16 +417,9 @@ function rowStatus(r: HistoryReading): string {
   return 'normal'
 }
 
-function footer(doc: jsPDF, W: number, page: number, total: number) {
-  const footerY = 283
+function footer(doc: jsPDF, W: number, _page: number, _total: number) {
   doc.setDrawColor(...PINK)
-  doc.line(15, footerY, W - 15, footerY)
-  doc.setTextColor(...GRAY)
-  doc.setFontSize(6.5)
-  doc.setFont('helvetica', 'italic')
-  doc.text('This report is for informational purposes only and does not constitute medical advice.', W / 2, footerY + 5, { align: 'center' })
-  doc.setFont('helvetica', 'normal')
-  doc.text(`RoseGuard Monitor · Page ${page} of ${total}`, W / 2, footerY + 10, { align: 'center' })
+  doc.line(15, 283, W - 15, 283)
 }
 
 export function generateHistoryPdf(data: HistoryPdfData): { doc: jsPDF; sizeKb: number } {
@@ -221,7 +427,6 @@ export function generateHistoryPdf(data: HistoryPdfData): { doc: jsPDF; sizeKb: 
   const W = 210
   const ROWS_PER_PAGE = 28
 
-  // ── Shared header renderer ────────────────────────────────
   function drawHeader(pageNum: number) {
     doc.setFillColor(...DARK)
     doc.rect(0, 0, W, 44, 'F')
@@ -244,11 +449,9 @@ export function generateHistoryPdf(data: HistoryPdfData): { doc: jsPDF; sizeKb: 
     doc.text(`${dateStr}`, W - 15, 34, { align: 'right' })
   }
 
-  // ── Page 1 ───────────────────────────────────────────────
   drawHeader(1)
   let y = 57
 
-  // Summary stats
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(...GRAY)
@@ -284,19 +487,17 @@ export function generateHistoryPdf(data: HistoryPdfData): { doc: jsPDF; sizeKb: 
     doc.setTextColor(...GRAY)
     doc.setFontSize(6.5)
     doc.setFont('helvetica', 'normal')
-    doc.text(`↓ ${col.stats.min}${col.unit}  ↑ ${col.stats.max}${col.unit}`, x + 5, y + 26)
+    doc.text(`min ${col.stats.min}${col.unit}  max ${col.stats.max}${col.unit}`, x + 5, y + 26)
   })
 
   y += cardH + 10
 
-  // Readings count badge
   doc.setFontSize(7.5)
   doc.setFont('helvetica', 'bold')
   doc.setTextColor(...GRAY)
   doc.text(`ALL READINGS  (${data.readings.length} total)`, 15, y)
   y += 5
 
-  // Table header
   const totalPages = Math.ceil(data.readings.length / ROWS_PER_PAGE) + 1
   const rowH = 7.5
 
@@ -316,12 +517,10 @@ export function generateHistoryPdf(data: HistoryPdfData): { doc: jsPDF; sizeKb: 
 
   y = drawTableHeader(y)
 
-  // ── Rows across pages ─────────────────────────────────────
   let currentPage = 1
   const sortedReadings = [...data.readings].reverse()
 
   sortedReadings.forEach((r, i) => {
-    // New page when full
     if (i > 0 && i % ROWS_PER_PAGE === 0) {
       footer(doc, W, currentPage, totalPages)
       doc.addPage()

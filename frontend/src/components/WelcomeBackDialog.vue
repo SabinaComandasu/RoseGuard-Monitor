@@ -2,9 +2,20 @@
 import { ref } from 'vue'
 import { useUserStore } from '@/stores/user'
 
-const emit = defineEmits<{ close: [] }>()
+export interface WelcomeChanges {
+  weightChanged:   boolean
+  sleepChanged:    boolean
+  fitnessChanged:  boolean
+}
+
+const emit = defineEmits<{ close: [changes: WelcomeChanges | null] }>()
 
 const user = useUserStore()
+
+// Capture values at dialog open so we can diff on save
+const initWeight   = user.weightKg
+const initSleep    = user.sleepHours
+const initFitness  = user.fitnessLevel
 
 const weight       = ref(user.weightKg)
 const targetWeight = ref(user.targetWeightKg)
@@ -15,6 +26,11 @@ const medications  = ref(user.medications)
 const saving = ref(false)
 
 async function confirm() {
+  const changes: WelcomeChanges = {
+    weightChanged:  weight.value !== initWeight,
+    sleepChanged:   sleepHours.value !== initSleep,
+    fitnessChanged: fitnessLevel.value !== initFitness,
+  }
   saving.value = true
   user.weightKg       = weight.value
   user.targetWeightKg = targetWeight.value
@@ -23,14 +39,20 @@ async function confirm() {
   user.medications    = medications.value
   await user.save().catch(() => {})
   saving.value = false
-  emit('close')
+  emit('close', changes)
 }
 
 function dismiss() {
-  emit('close')
+  emit('close', null)
 }
 
-const fitnessOptions = ['Sedentary', 'Lightly Active', 'Moderately Active', 'Very Active', 'Athlete']
+const fitnessOptions = [
+  { value: 'sedentary',   label: 'Sedentary'            },
+  { value: 'light',       label: 'Light (1–3×/week)'    },
+  { value: 'moderate',    label: 'Moderate (3–5×/week)' },
+  { value: 'active',      label: 'Active (6–7×/week)'   },
+  { value: 'very_active', label: 'Very Active (athlete)'},
+]
 </script>
 
 <template>
@@ -66,7 +88,7 @@ const fitnessOptions = ['Sedentary', 'Lightly Active', 'Moderately Active', 'Ver
               <label>Fitness level</label>
               <select v-model="fitnessLevel">
                 <option value="">— select —</option>
-                <option v-for="o in fitnessOptions" :key="o" :value="o">{{ o }}</option>
+                <option v-for="o in fitnessOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
               </select>
             </div>
           </div>

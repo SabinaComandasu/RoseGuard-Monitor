@@ -2,6 +2,17 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/services/api'
 
+const FITNESS_NORM: Record<string, string> = {
+  'Sedentary':          'sedentary',
+  'Lightly Active':     'light',
+  'Moderately Active':  'moderate',
+  'Very Active':        'very_active',
+  'Athlete':            'very_active',
+}
+function normalizeFitness(val: string) {
+  return FITNESS_NORM[val] ?? val
+}
+
 export const useUserStore = defineStore('user', () => {
   // Personal
   const firstName = ref('')
@@ -49,8 +60,12 @@ export const useUserStore = defineStore('user', () => {
 
   const fullName = computed(() => [firstName.value, lastName.value].filter(Boolean).join(' '))
 
+  const isProfileComplete = computed(() =>
+    !!dateOfBirth.value && !!sex.value && !!heightCm.value && !!weightKg.value
+  )
+
   async function load() {
-    const { data } = await api.get('/profile')
+    const { data } = await api.get('/profile').catch(() => ({ data: {} }))
     firstName.value          = data.firstName ?? ''
     lastName.value           = data.lastName ?? ''
     email.value              = data.email ?? ''
@@ -65,7 +80,7 @@ export const useUserStore = defineStore('user', () => {
     conditions.value         = data.conditions ?? ''
     medications.value        = data.medications ?? ''
     allergies.value          = data.allergies ?? ''
-    fitnessLevel.value       = data.fitnessLevel ?? ''
+    fitnessLevel.value       = normalizeFitness(data.fitnessLevel ?? '')
     smokingStatus.value      = data.smokingStatus ?? ''
     alcoholConsumption.value = data.alcoholConsumption ?? ''
     sleepHours.value         = data.sleepHours ?? null
@@ -105,7 +120,7 @@ export const useUserStore = defineStore('user', () => {
     conditions, medications, allergies,
     fitnessLevel, smokingStatus, alcoholConsumption, sleepHours,
     emergencyName, emergencyPhone, emergencyRelationship,
-    bmi, age, fullName,
+    bmi, age, fullName, isProfileComplete,
     load, save,
   }
 })

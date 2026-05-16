@@ -27,11 +27,28 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 Adafruit_MLX90614 mlx = Adafruit_MLX90614();
 
 // ================= BEEP =================
-#define BEEP_PIN 25
+#define BEEP_PIN   25
+#define BEEP_PIN_B 26  // differential return — speaker between pin 25 and pin 26
+
+// Push-pull drive: toggles both pins in opposition for 2x voltage swing (3.3V → 6.6V p-p)
+void beepDiff(int freq, int durationMs) {
+  unsigned long halfUs = 1000000UL / (2 * (unsigned long)freq);
+  unsigned long endUs  = micros() + (unsigned long)durationMs * 1000;
+  while ((long)(micros() - endUs) < 0) {
+    digitalWrite(BEEP_PIN,   HIGH);
+    digitalWrite(BEEP_PIN_B, LOW);
+    delayMicroseconds(halfUs);
+    digitalWrite(BEEP_PIN,   LOW);
+    digitalWrite(BEEP_PIN_B, HIGH);
+    delayMicroseconds(halfUs);
+  }
+  digitalWrite(BEEP_PIN,   LOW);
+  digitalWrite(BEEP_PIN_B, LOW);
+}
 
 void beep(int freq, int duration) {
-  tone(BEEP_PIN, freq, duration);
-  delay(duration + 50);
+  beepDiff(freq, duration);
+  delay(50);
 }
 
 void successSound() {
@@ -58,9 +75,8 @@ void bootSound() {
   beep(523, 400);
 }
 
-
 void heartBeep() {
-  tone(BEEP_PIN, 880, 40);  // short sharp beep per beat, non-blocking
+  beepDiff(880, 40);
 }
 
 // ================= BLE =================
@@ -137,9 +153,9 @@ float spo2Avg = 0;
 bool finger = false;
 bool prevFinger = false;
 
-const float DC_ALPHA      = 0.01f;
+const float DC_ALPHA      = 0.05f;   // faster DC settling (~0.6s vs ~3s)
 const float AC_ALPHA      = 0.02f;
-const float MIN_PEAK      = 300.0f;
+const float MIN_PEAK      = 1.5f;    // normalized pulsatile fraction (×1000 scale)
 const unsigned long REFRACT_MS = 400;
 const float SPO2_OFFSET   = 12.0f;  // empirical correction for this sensor clone
 
@@ -150,7 +166,9 @@ void updateVitals(uint32_t redRaw, uint32_t irRaw) {
   lastRed = redRaw;
   lastIR  = irRaw;
 
-  finger = (irRaw > 20000);
+  // Hysteresis: need IR > 30000 to acquire finger, IR < 15000 to lose it
+  if (!finger) finger = (irRaw > 30000);
+  else         finger = (irRaw > 15000);
 
   dcIR  = (dcIR  == 0) ? irRaw  : dcIR  + DC_ALPHA * (irRaw  - dcIR);
   dcRed = (dcRed == 0) ? redRaw : dcRed + DC_ALPHA * (redRaw - dcRed);
@@ -161,14 +179,19 @@ void updateVitals(uint32_t redRaw, uint32_t irRaw) {
   acIR  += AC_ALPHA * (fabsf(irAC)  - acIR);
   acRed += AC_ALPHA * (fabsf(redAC) - acRed);
 
+  // Normalise by DC so peak threshold is contact-pressure independent
+  float normIR = (dcIR > 1000.0f) ? (irAC / dcIR) * 1000.0f : 0.0f;
   prevFiltIR = filtIR;
-  filtIR = 0.8f * filtIR + 0.2f * irAC;
+  filtIR = 0.8f * filtIR + 0.2f * normIR;
 
   float diff = filtIR - prevFiltIR;
   bool peak = (prevDiff > 0 && diff <= 0);
 
   unsigned long now = millis();
-  if (finger && peak && prevFiltIR > MIN_PEAK && (now - lastBeatMs) > REFRACT_MS) {
+  // Only accept beats once DC has settled to ≥80% of the raw signal (avoids false
+  // peaks in the first ~0.5s after finger placement while baseline is still tracking)
+  bool dcSettled = dcIR > irRaw * 0.8f;
+  if (finger && peak && prevFiltIR > MIN_PEAK && (now - lastBeatMs) > REFRACT_MS && dcSettled) {
     if (lastBeatMs) {
       float bpm = 60000.0f / (now - lastBeatMs);
       if (bpm >= 40 && bpm <= 200)
@@ -196,10 +219,10 @@ void updateVitals(uint32_t redRaw, uint32_t irRaw) {
 void max30102Init() {
   max_w8(REG_MODE_CFG, 0x40);
   delay(100);
-  max_w8(REG_FIFO_CFG, 0x10);
+  max_w8(REG_FIFO_CFG, 0x50);  // SMP_AVE=4 samples + FIFO rollover
   max_w8(REG_SPO2_CFG, 0x27);
-  max_w8(REG_LED1_PA, 0x40);
-  max_w8(REG_LED2_PA, 0x40);
+  max_w8(REG_LED1_PA, 0x24);   // ~7 mA — start low to avoid ADC saturation
+  max_w8(REG_LED2_PA, 0x24);
   max_w8(REG_MODE_CFG, 0x03);
   delay(50);
 }
@@ -217,7 +240,7 @@ void drawScreen(float tempObjC) {
 
   display.setCursor(0, 16);
   display.print("Oxigen: ");
-  finger ? display.print(max(95, (int)spo2Avg)) : display.print("--");
+  finger ? display.print((int)spo2Avg) : display.print("--");
   display.println("%");
 
   display.setCursor(0, 32);
@@ -236,7 +259,7 @@ void serialPrint(float tempObjC) {
   Serial.print("Puls: ");
   finger ? Serial.print((int)bpmAvg) : Serial.print("--");
   Serial.print(" bpm | Oxigen: ");
-  finger ? Serial.print(max(95, (int)spo2Avg)) : Serial.print("--");
+  finger ? Serial.print((int)spo2Avg) : Serial.print("--");
   Serial.print("% | Deget: ");
   Serial.print(finger ? "detectat" : "nedetectat");
   Serial.print(" | Temp: ");
@@ -253,7 +276,7 @@ void bleSend(float tempObjC) {
   snprintf(msg, sizeof(msg),
     "%d,%d,%d,%.2f,%.2f,%lu,%lu",
     finger ? (int)bpmAvg : -1,
-    (finger && spo2Avg > 0) ? max(95, (int)spo2Avg) : -1,
+    (finger && spo2Avg > 0) ? (int)spo2Avg : -1,
     finger ? 1 : 0,
     isfinite(tempObjC) ? tempObjC : -1000.0f,
     isfinite(tempF) ? tempF : -1000.0f,
@@ -316,7 +339,10 @@ float mlxObjC = NAN;
 
 void setup() {
   Serial.begin(115200);
-  pinMode(BEEP_PIN, OUTPUT);
+  pinMode(BEEP_PIN,    OUTPUT);
+  pinMode(BEEP_PIN_B,  OUTPUT);
+  digitalWrite(BEEP_PIN,   LOW);
+  digitalWrite(BEEP_PIN_B, LOW);
 
   Wire.begin(SDA_PIN, SCL_PIN);
   Wire.setClock(I2C_HZ);
@@ -423,7 +449,7 @@ void loop() {
     removeSound();
   }
   if (finger && (millis() - lastBeepMs > 800)) {
-    tone(BEEP_PIN, 880, 60);
+    heartBeep();
     lastBeepMs = millis();
   }
   prevFinger = finger;
