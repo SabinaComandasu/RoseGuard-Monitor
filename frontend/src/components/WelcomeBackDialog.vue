@@ -114,14 +114,6 @@ const fitnessOptions = [
               <i class="pi pi-check" v-if="wantsTour === true" />
               Yes, guide me
             </button>
-            <button
-              class="tour-choice"
-              :class="{ selected: wantsTour === false }"
-              @click="wantsTour = false"
-            >
-              <i class="pi pi-check" v-if="wantsTour === false" />
-              No, I'm good
-            </button>
           </div>
         </div>
 

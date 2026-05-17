@@ -24,6 +24,7 @@ const healthAdvice = useHealthAdviceStore()
 const healthAdviceNotif = ref(false)
 const chatOpen = ref(false)
 const sidebarOpen = ref(true)
+const shellEntering = ref(false)
 const showWelcome = ref(false)
 const showProfileGate = ref(false)
 const showTour = ref(false)
@@ -34,6 +35,14 @@ onMounted(async () => {
     await user.load()
     if (!user.isProfileComplete) showProfileGate.value = true
   } catch {}
+})
+
+watch(() => route.meta.public, (isPublic, wasPublic) => {
+  if (wasPublic && !isPublic) {
+    shellEntering.value = true
+    document.body.style.background = ''
+    setTimeout(() => { shellEntering.value = false }, 1100)
+  }
 })
 
 watch(() => auth.justLoggedIn, async (val) => {
@@ -107,8 +116,8 @@ function onChatToggle() {
 
   <!-- Authenticated shell -->
   <template v-else>
-    <AppSidebar :open="sidebarOpen" />
-    <div class="app-main" :class="{ expanded: !sidebarOpen }">
+    <AppSidebar :open="sidebarOpen" :class="{ 'shell-entering': shellEntering }" />
+    <div class="app-main" :class="{ expanded: !sidebarOpen, 'shell-entering': shellEntering }">
       <header class="app-header">
         <button class="toggle-btn" @click="sidebarOpen = !sidebarOpen" :title="sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'">
           <i :class="sidebarOpen ? 'pi pi-angle-left' : 'pi pi-angle-right'" />
@@ -333,4 +342,25 @@ function onChatToggle() {
 .notif-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
 .notif-enter-from   { opacity: 0; transform: translateY(10px) scale(0.92); }
 .notif-leave-to     { opacity: 0; transform: translateY(6px)  scale(0.95); }
+
+/* ============================================================
+   Login → Dashboard entrance
+   ============================================================ */
+.sidebar.shell-entering {
+  animation: sidebar-enter 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes sidebar-enter {
+  from { opacity: 0; transform: translateX(-100%); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.app-main.shell-entering {
+  animation: app-main-enter 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+
+@keyframes app-main-enter {
+  from { opacity: 0; transform: translateY(22px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 </style>

@@ -16,7 +16,8 @@ const lastName  = ref('')
 const loading   = ref(false)
 const error     = ref('')
 const shakeError = ref(false)
-const animating = ref(false)
+const animating  = ref(false)
+const fadingOut  = ref(false)
 
 async function loginSuccess() {
   animating.value = true
@@ -49,6 +50,9 @@ async function loginSuccess() {
     if (audio.readyState >= 1) setupFade()
   })
 
+  fadingOut.value = true
+  document.body.style.background = '#120810'
+  await new Promise(r => setTimeout(r, 220))
   router.push('/dashboard')
 }
 
@@ -121,7 +125,7 @@ function triggerShake() {
 </script>
 
 <template>
-  <div class="signin-page" :class="{ animating }">
+  <div class="signin-page" :class="{ animating, 'fading-out': fadingOut }">
 
     <!-- Left panel -->
     <div class="signin-left">
@@ -158,6 +162,10 @@ function triggerShake() {
             <div class="feature-item animate-fade-up" style="animation-delay: 0.36s">
               <span class="feature-icon"><i class="pi pi-file-pdf" /></span>
               <span>Professional PDF health reports</span>
+            </div>
+            <div class="feature-item animate-fade-up" style="animation-delay: 0.44s">
+              <span class="feature-icon"><i class="pi pi-sparkles" /></span>
+              <span>AI health analysis &amp; advice</span>
             </div>
           </div>
         </div>
@@ -251,6 +259,21 @@ function triggerShake() {
   display: flex;
   min-height: 100vh;
   width: 100%;
+}
+
+.signin-page::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: #120810;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 9999;
+  transition: opacity 0.2s ease;
+}
+
+.signin-page.fading-out::before {
+  opacity: 1;
 }
 
 /* ============================================================
@@ -709,17 +732,15 @@ input::placeholder { color: var(--color-text-muted); }
   gap: 0;
 }
 
-/* 4. Left content expands to full panel and gap closes so logo sits center */
-.animating .left-content {
-  gap: 0;
-  width: 100%;
-  max-width: none;
-}
+/* 4. Left content gap closes so logo sits center */
+.animating .left-content { gap: 0; }
 
 /* 4c. Slogan appears after logo expansion (~0.85s) */
 .animating .brand-slogan {
+  width: 480px;
   max-height: 4em;
   margin-top: 16px;
+  margin-left: 24px;
   animation: slogan-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.85s both;
 }
 
