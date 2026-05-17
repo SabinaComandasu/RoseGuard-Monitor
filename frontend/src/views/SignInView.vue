@@ -8,6 +8,50 @@ const auth = useAuthStore()
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
+const mode      = ref<'login' | 'register'>('login')
+const email     = ref('')
+const password  = ref('')
+const firstName = ref('')
+const lastName  = ref('')
+const loading   = ref(false)
+const error     = ref('')
+const shakeError = ref(false)
+const animating = ref(false)
+
+async function loginSuccess() {
+  animating.value = true
+
+  await new Promise<void>(resolve => {
+    const audio = new Audio('/systemReboot.mp3')
+    let ctx: AudioContext | null = null
+
+    function setupFade() {
+      if (ctx || isNaN(audio.duration)) return
+      ctx = new AudioContext()
+      const source = ctx.createMediaElementSource(audio)
+      const gain   = ctx.createGain()
+      source.connect(gain)
+      gain.connect(ctx.destination)
+
+      // Fade starts 45% into the track and uses a time constant sized so
+      // gain reaches ~1% (e^-4) by the natural end — completely silent.
+      const fadeAt = audio.duration * 0.45
+      const tau    = (audio.duration - fadeAt) / 4
+
+      gain.gain.setValueAtTime(1, ctx.currentTime)
+      gain.gain.setValueAtTime(1, ctx.currentTime + fadeAt)
+      gain.gain.setTargetAtTime(0.001, ctx.currentTime + fadeAt, tau)
+    }
+
+    audio.addEventListener('loadedmetadata', setupFade)
+    audio.addEventListener('ended', () => { ctx?.close(); resolve() })
+    audio.play().catch(() => resolve())
+    if (audio.readyState >= 1) setupFade()
+  })
+
+  router.push('/dashboard')
+}
+
 onMounted(() => {
   if (!window.google) return
   window.google.accounts.id.initialize({
@@ -15,7 +59,7 @@ onMounted(() => {
     callback: async (response: { credential: string }) => {
       try {
         await auth.loginWithGoogle(response.credential)
-        router.push('/dashboard')
+        await loginSuccess()
       } catch (e: any) {
         error.value = e.message
         triggerShake()
@@ -27,15 +71,6 @@ onMounted(() => {
     { type: 'standard', theme: 'outline', size: 'large', width: 360, text: 'continue_with' }
   )
 })
-
-const mode = ref<'login' | 'register'>('login')
-const email = ref('')
-const password = ref('')
-const firstName = ref('')
-const lastName = ref('')
-const loading = ref(false)
-const error = ref('')
-const shakeError = ref(false)
 
 function switchMode(m: 'login' | 'register') {
   mode.value = m
@@ -68,11 +103,10 @@ async function handleSubmit() {
     } else {
       await auth.register(email.value, password.value, firstName.value, lastName.value)
     }
-    router.push('/dashboard')
+    await loginSuccess()
   } catch (e: any) {
     error.value = e.message
     triggerShake()
-  } finally {
     loading.value = false
   }
 }
@@ -87,47 +121,50 @@ function triggerShake() {
 </script>
 
 <template>
-  <div class="signin-page">
+  <div class="signin-page" :class="{ animating }">
+
     <!-- Left panel -->
     <div class="signin-left">
-      <!-- Floating orbs -->
       <div class="orb orb-1" />
       <div class="orb orb-2" />
       <div class="orb orb-3" />
 
       <div class="left-content">
-        <div class="brand-hero-group">
-          <div class="brand animate-fade-down">
-            <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="brand-logo-img" />
-          </div>
-
-          <div class="left-hero animate-fade-up" style="animation-delay: 0.1s">
-          <h2>Monitor your health,<br />live better every day.</h2>
-          <p>
-            Real-time biometric data from your wearable sensor -
-            SpO2, heart rate, and temperature, all in one place.
-          </p>
+        <!-- Logo — stays visible during animation, flies to center -->
+        <div class="brand animate-fade-down">
+          <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="brand-logo-img" />
+          <p class="brand-slogan">Your health, always in view.</p>
         </div>
-        </div><!-- end brand-hero-group -->
 
-        <div class="left-features">
-          <div class="feature-item animate-fade-up" style="animation-delay: 0.2s">
-            <span class="feature-icon"><i class="pi pi-heart" /></span>
-            <span>Live biometric readings via Bluetooth</span>
+        <!-- Text + features — collapse on successful login -->
+        <div class="collapsible-content">
+          <div class="left-hero animate-fade-up" style="animation-delay: 0.1s">
+            <h2>Monitor your health,<br />live better every day.</h2>
+            <p>
+              Real-time biometric data from your wearable sensor -
+              SpO2, heart rate, and temperature, all in one place.
+            </p>
           </div>
-          <div class="feature-item animate-fade-up" style="animation-delay: 0.28s">
-            <span class="feature-icon"><i class="pi pi-chart-line" /></span>
-            <span>Health KPIs & trend analysis</span>
-          </div>
-          <div class="feature-item animate-fade-up" style="animation-delay: 0.36s">
-            <span class="feature-icon"><i class="pi pi-file-pdf" /></span>
-            <span>Professional PDF health reports</span>
+
+          <div class="left-features">
+            <div class="feature-item animate-fade-up" style="animation-delay: 0.2s">
+              <span class="feature-icon"><i class="pi pi-heart" /></span>
+              <span>Live biometric readings via Bluetooth</span>
+            </div>
+            <div class="feature-item animate-fade-up" style="animation-delay: 0.28s">
+              <span class="feature-icon"><i class="pi pi-chart-line" /></span>
+              <span>Health KPIs &amp; trend analysis</span>
+            </div>
+            <div class="feature-item animate-fade-up" style="animation-delay: 0.36s">
+              <span class="feature-icon"><i class="pi pi-file-pdf" /></span>
+              <span>Professional PDF health reports</span>
+            </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Right panel -->
+    <!-- Right panel — collapses on successful login -->
     <div class="signin-right">
       <div class="form-card animate-fade-up">
         <div class="form-header">
@@ -135,19 +172,16 @@ function triggerShake() {
           <p>{{ mode === 'login' ? 'Sign in to your RoseGuard account' : 'Start monitoring your health today' }}</p>
         </div>
 
-        <!-- Google button (rendered by GSI library) -->
         <div id="google-btn" class="google-btn-wrap" />
 
         <div class="divider"><span>or continue with email</span></div>
 
-        <!-- Error message -->
         <Transition name="error">
           <div v-if="error" class="error-msg" :class="{ shake: shakeError }">
             <i class="pi pi-exclamation-circle" /> {{ error }}
           </div>
         </Transition>
 
-        <!-- Form -->
         <form class="signin-form" @submit.prevent="handleSubmit">
           <Transition name="fields" mode="out-in">
             <div v-if="mode === 'register'" class="name-row" key="name">
@@ -205,6 +239,7 @@ function triggerShake() {
         </p>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -230,65 +265,85 @@ function triggerShake() {
   padding: 48px;
   position: relative;
   overflow: hidden;
+  transition: padding 0.6s ease;
 }
 
-/* Animated floating orbs */
 .orb {
   position: absolute;
   border-radius: 50%;
   pointer-events: none;
+  transition: opacity 0.35s ease;
 }
 
 .orb-1 {
-  width: 420px;
-  height: 420px;
-  top: -140px;
-  right: -140px;
+  width: 420px; height: 420px;
+  top: -140px; right: -140px;
   background: radial-gradient(circle, rgba(233, 30, 140, 0.2) 0%, transparent 70%);
   animation: float 8s ease-in-out infinite;
 }
 
 .orb-2 {
-  width: 300px;
-  height: 300px;
-  bottom: -100px;
-  left: -100px;
+  width: 300px; height: 300px;
+  bottom: -100px; left: -100px;
   background: radial-gradient(circle, rgba(233, 30, 140, 0.12) 0%, transparent 70%);
   animation: float 10s ease-in-out infinite reverse;
 }
 
 .orb-3 {
-  width: 180px;
-  height: 180px;
-  top: 50%;
-  left: 30%;
+  width: 180px; height: 180px;
+  top: 50%; left: 30%;
   background: radial-gradient(circle, rgba(233, 30, 140, 0.07) 0%, transparent 70%);
   animation: float 6s ease-in-out infinite 2s;
 }
 
 @keyframes float {
   0%, 100% { transform: translateY(0px) scale(1); }
-  50% { transform: translateY(-20px) scale(1.04); }
+  50%       { transform: translateY(-20px) scale(1.04); }
 }
 
 .left-content {
   max-width: 380px;
   display: flex;
   flex-direction: column;
-  gap: 40px;
+  gap: 24px;
   position: relative;
   z-index: 1;
-}
-
-.brand-hero-group {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+  transition: gap 0.5s ease 0.25s;
 }
 
 .brand {
   display: flex;
+  flex-direction: column;
   align-items: center;
+  justify-content: center;
+  overflow: visible;
+}
+
+.brand-slogan {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  font-family: 'Raleway', sans-serif;
+  color: #ffffff;
+  letter-spacing: 0.2px;
+  text-align: center;
+  white-space: nowrap;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+}
+
+@keyframes slogan-in {
+  from {
+    opacity: 0;
+    letter-spacing: 10px;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    letter-spacing: 0.2px;
+    transform: translateY(0);
+  }
 }
 
 .brand-logo-img {
@@ -300,6 +355,9 @@ function triggerShake() {
     drop-shadow(0 0 4px rgba(233, 30, 140, 1))
     drop-shadow(0 0 12px rgba(233, 30, 140, 0.75))
     drop-shadow(0 0 24px rgba(233, 30, 140, 0.45));
+  transition:
+    width 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.2s,
+    filter 0.65s ease 0.2s;
 }
 
 @keyframes heartbeat {
@@ -308,6 +366,16 @@ function triggerShake() {
   28%       { transform: scale(1); }
   42%       { transform: scale(1.03); }
   56%       { transform: scale(1); }
+}
+
+/* Collapsible section (hero text + features) */
+.collapsible-content {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  overflow: hidden;
+  max-height: 600px;
+  transition: max-height 0.55s ease 0.1s, opacity 0.3s ease, gap 0.4s ease 0.1s;
 }
 
 .left-hero h2 {
@@ -346,8 +414,7 @@ function triggerShake() {
 }
 
 .feature-icon {
-  width: 32px;
-  height: 32px;
+  width: 32px; height: 32px;
   border-radius: 8px;
   background: rgba(233, 30, 140, 0.15);
   border: 1px solid rgba(233, 30, 140, 0.25);
@@ -375,6 +442,11 @@ function triggerShake() {
   justify-content: center;
   padding: 48px 40px;
   background: var(--color-surface);
+  overflow: hidden;
+  transition:
+    width 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+    padding 0.55s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.35s ease;
 }
 
 .form-card {
@@ -382,9 +454,7 @@ function triggerShake() {
   max-width: 360px;
 }
 
-.form-header {
-  margin-bottom: 28px;
-}
+.form-header { margin-bottom: 28px; }
 
 .form-header h1 {
   font-size: 22px;
@@ -399,14 +469,12 @@ function triggerShake() {
   margin-top: 4px;
 }
 
-/* Google button */
 .google-btn-wrap {
   display: flex;
   justify-content: center;
   width: 100%;
 }
 
-/* Divider */
 .divider {
   display: flex;
   align-items: center;
@@ -424,7 +492,6 @@ function triggerShake() {
   background: var(--color-border);
 }
 
-/* Error */
 .error-msg {
   display: flex;
   align-items: center;
@@ -438,9 +505,7 @@ function triggerShake() {
   margin-bottom: 16px;
 }
 
-.error-msg.shake {
-  animation: shake 0.45s ease;
-}
+.error-msg.shake { animation: shake 0.45s ease; }
 
 @keyframes shake {
   0%, 100% { transform: translateX(0); }
@@ -452,7 +517,6 @@ function triggerShake() {
   90%       { transform: translateX(2px); }
 }
 
-/* Error transition */
 .error-enter-active { animation: error-in 0.25s ease; }
 .error-leave-active { animation: error-in 0.2s ease reverse; }
 
@@ -471,7 +535,6 @@ function triggerShake() {
 .fields-enter-from { opacity: 0; transform: translateY(-8px); }
 .fields-leave-to   { opacity: 0; transform: translateY(-8px); }
 
-/* Form fields */
 .signin-form {
   display: flex;
   flex-direction: column;
@@ -509,9 +572,7 @@ label {
   text-decoration: underline;
 }
 
-.input-wrap {
-  position: relative;
-}
+.input-wrap { position: relative; }
 
 .input-icon {
   position: absolute;
@@ -524,9 +585,7 @@ label {
   transition: color 0.15s ease;
 }
 
-.input-wrap:focus-within .input-icon {
-  color: var(--color-primary);
-}
+.input-wrap:focus-within .input-icon { color: var(--color-primary); }
 
 input {
   width: 100%;
@@ -547,11 +606,8 @@ input:focus {
   transform: translateY(-1px);
 }
 
-input::placeholder {
-  color: var(--color-text-muted);
-}
+input::placeholder { color: var(--color-text-muted); }
 
-/* Sign in button */
 .signin-btn {
   width: 100%;
   padding: 11px;
@@ -581,9 +637,7 @@ input::placeholder {
   transition: opacity 0.2s ease;
 }
 
-.signin-btn:hover:not(:disabled)::after {
-  opacity: 1;
-}
+.signin-btn:hover:not(:disabled)::after { opacity: 1; }
 
 .signin-btn:hover:not(:disabled) {
   background: var(--color-primary-dark);
@@ -596,12 +650,8 @@ input::placeholder {
   box-shadow: 0 2px 8px rgba(233, 30, 140, 0.3);
 }
 
-.signin-btn:disabled {
-  opacity: 0.75;
-  cursor: not-allowed;
-}
+.signin-btn:disabled { opacity: 0.75; cursor: not-allowed; }
 
-/* Sign up link */
 .signup-link {
   text-align: center;
   font-size: 13px;
@@ -624,13 +674,8 @@ input::placeholder {
 /* ============================================================
    Entrance animations
    ============================================================ */
-.animate-fade-up {
-  animation: fade-up 0.5s ease both;
-}
-
-.animate-fade-down {
-  animation: fade-down 0.5s ease both;
-}
+.animate-fade-up   { animation: fade-up   0.5s ease both; }
+.animate-fade-down { animation: fade-down 0.5s ease both; }
 
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(18px); }
@@ -640,5 +685,57 @@ input::placeholder {
 @keyframes fade-down {
   from { opacity: 0; transform: translateY(-12px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   Login success animation
+   ============================================================ */
+
+/* 1. Right panel collapses */
+.animating .signin-right {
+  width: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* 2. Orbs fade out */
+.animating .orb { opacity: 0; }
+
+/* 3. Text content collapses */
+.animating .collapsible-content {
+  max-height: 0;
+  opacity: 0;
+  gap: 0;
+}
+
+/* 4. Left content expands to full panel and gap closes so logo sits center */
+.animating .left-content {
+  gap: 0;
+  width: 100%;
+  max-width: none;
+}
+
+/* 4c. Slogan appears after logo expansion (~0.85s) */
+.animating .brand-slogan {
+  max-height: 4em;
+  margin-top: 16px;
+  animation: slogan-in 0.8s cubic-bezier(0.22, 1, 0.36, 1) 0.85s both;
+}
+
+/* 5. Logo grows, glows, then pulses — pulse delay matches expansion end */
+.animating .brand-logo-img {
+  width: 480px;
+  animation: logo-enter-pulse 1.2s ease-in-out 0.8s infinite;
+  filter:
+    drop-shadow(0 0 10px rgba(233, 30, 140, 1))
+    drop-shadow(0 0 32px rgba(233, 30, 140, 0.9))
+    drop-shadow(0 0 72px rgba(233, 30, 140, 0.6))
+    drop-shadow(0 0 120px rgba(233, 30, 140, 0.3));
+}
+
+@keyframes logo-enter-pulse {
+  0%, 100% { transform: scale(1); }
+  50%       { transform: scale(1.07); }
 }
 </style>
