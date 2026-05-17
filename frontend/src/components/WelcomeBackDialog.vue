@@ -8,7 +8,7 @@ export interface WelcomeChanges {
   fitnessChanged:  boolean
 }
 
-const emit = defineEmits<{ close: [changes: WelcomeChanges | null] }>()
+const emit = defineEmits<{ close: [changes: WelcomeChanges | null, wantsTour: boolean] }>()
 
 const user = useUserStore()
 
@@ -24,6 +24,7 @@ const fitnessLevel = ref(user.fitnessLevel)
 const medications  = ref(user.medications)
 
 const saving = ref(false)
+const wantsTour = ref<boolean | null>(null)
 
 async function confirm() {
   const changes: WelcomeChanges = {
@@ -39,11 +40,11 @@ async function confirm() {
   user.medications    = medications.value
   await user.save().catch(() => {})
   saving.value = false
-  emit('close', changes)
+  emit('close', changes, wantsTour.value === true)
 }
 
 function dismiss() {
-  emit('close', null)
+  emit('close', null, wantsTour.value === true)
 }
 
 const fitnessOptions = [
@@ -63,7 +64,7 @@ const fitnessOptions = [
           <span class="wave">👋</span>
           <div>
             <h2>Welcome back, {{ user.firstName || 'there' }}!</h2>
-            <p class="subtitle">Just checking in — have any of these changed since your last visit?</p>
+            <p class="subtitle">Just checking in - have any of these changed since your last visit?</p>
           </div>
         </div>
 
@@ -71,23 +72,23 @@ const fitnessOptions = [
           <div class="field-row">
             <div class="field">
               <label>Weight (kg)</label>
-              <input type="number" v-model="weight" min="30" max="300" step="0.5" placeholder="—" />
+              <input type="number" v-model="weight" min="30" max="300" step="0.5" placeholder="-" />
             </div>
             <div class="field">
               <label>Target weight (kg)</label>
-              <input type="number" v-model="targetWeight" min="30" max="300" step="0.5" placeholder="—" />
+              <input type="number" v-model="targetWeight" min="30" max="300" step="0.5" placeholder="-" />
             </div>
           </div>
 
           <div class="field-row">
             <div class="field">
               <label>Sleep hours / night</label>
-              <input type="number" v-model="sleepHours" min="1" max="24" step="0.5" placeholder="—" />
+              <input type="number" v-model="sleepHours" min="1" max="24" step="0.5" placeholder="-" />
             </div>
             <div class="field">
               <label>Fitness level</label>
               <select v-model="fitnessLevel">
-                <option value="">— select —</option>
+                <option value="">- select -</option>
                 <option v-for="o in fitnessOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
               </select>
             </div>
@@ -96,6 +97,31 @@ const fitnessOptions = [
           <div class="field full">
             <label>Current medications</label>
             <textarea v-model="medications" rows="2" placeholder="None" />
+          </div>
+        </div>
+
+        <div class="tour-offer">
+          <div class="tour-offer-label">
+            <i class="pi pi-compass" />
+            Need a quick refresher on the app?
+          </div>
+          <div class="tour-choices">
+            <button
+              class="tour-choice"
+              :class="{ selected: wantsTour === true }"
+              @click="wantsTour = true"
+            >
+              <i class="pi pi-check" v-if="wantsTour === true" />
+              Yes, guide me
+            </button>
+            <button
+              class="tour-choice"
+              :class="{ selected: wantsTour === false }"
+              @click="wantsTour = false"
+            >
+              <i class="pi pi-check" v-if="wantsTour === false" />
+              No, I'm good
+            </button>
           </div>
         </div>
 
@@ -210,6 +236,66 @@ select:focus,
 textarea:focus {
   outline: none;
   border-color: var(--color-primary, #e91e8c);
+}
+
+.tour-offer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--color-surface, #f8f9fc);
+  border: 1.5px solid var(--color-border, #e8eaf6);
+  border-radius: 10px;
+  flex-wrap: wrap;
+}
+
+.tour-offer-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+.tour-offer-label .pi {
+  color: var(--color-primary, #e91e8c);
+  font-size: 14px;
+}
+
+.tour-choices {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tour-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 13px;
+  border-radius: 20px;
+  border: 1.5px solid var(--color-border, #e8eaf6);
+  background: transparent;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-text-secondary, #78909c);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.tour-choice:hover {
+  border-color: var(--color-primary, #e91e8c);
+  color: var(--color-primary, #e91e8c);
+  background: rgba(233, 30, 140, 0.05);
+}
+
+.tour-choice.selected {
+  border-color: var(--color-primary, #e91e8c);
+  background: rgba(233, 30, 140, 0.08);
+  color: var(--color-primary, #e91e8c);
 }
 
 .actions {

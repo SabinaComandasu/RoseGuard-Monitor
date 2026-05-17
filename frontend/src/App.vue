@@ -6,6 +6,7 @@ import FloatingChatButton from './components/FloatingChatButton.vue'
 import ChatPanel from './components/ChatPanel.vue'
 import WelcomeBackDialog from './components/WelcomeBackDialog.vue'
 import CompleteProfileDialog from './components/CompleteProfileDialog.vue'
+import OnboardingTour from './components/OnboardingTour.vue'
 import { useAuthStore } from './stores/auth'
 import { useUserStore } from './stores/user'
 import { useBiometricsStore } from './stores/biometrics'
@@ -25,6 +26,7 @@ const chatOpen = ref(false)
 const sidebarOpen = ref(true)
 const showWelcome = ref(false)
 const showProfileGate = ref(false)
+const showTour = ref(false)
 
 onMounted(async () => {
   if (!auth.isAuthenticated) return
@@ -47,8 +49,9 @@ watch(() => auth.justLoggedIn, async (val) => {
   }
 })
 
-function closeWelcome(changes: WelcomeChanges | null) {
+function closeWelcome(changes: WelcomeChanges | null, wantsTour: boolean) {
   showWelcome.value = false
+  if (wantsTour) showTour.value = true
   if (!changes) return
   healthAdvice.evaluate(user.bmi, user.sleepHours, user.fitnessLevel, changes)
   if (healthAdvice.hasAny) {
@@ -153,6 +156,7 @@ function onChatToggle() {
     <ChatPanel :open="chatOpen" @close="chatOpen = false" />
     <CompleteProfileDialog v-if="showProfileGate" @saved="onProfileSaved" />
     <WelcomeBackDialog v-if="showWelcome" @close="closeWelcome" />
+    <OnboardingTour v-if="showTour" @done="showTour = false" />
   </template>
 </template>
 

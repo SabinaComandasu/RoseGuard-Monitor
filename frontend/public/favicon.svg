@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Dark background with rounded corners -->
+  <rect width="32" height="32" rx="6" fill="#1a1a2e"/>
+  <!-- Pink medical cross -->
+  <path d="M12,5 h8 v7 h7 v8 h-7 v7 h-8 v-7 h-7 v-8 h7 Z" fill="#e91e8c"/>
+  <!-- White ECG/heartbeat line across the horizontal arm -->
+  <polyline points="5,16 9,16 11,12 13,20 15,13 17,19 19,16 27,16"
+            fill="none" stroke="white" stroke-width="1.5"
+            stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

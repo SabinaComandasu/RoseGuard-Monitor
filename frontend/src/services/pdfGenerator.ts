@@ -261,7 +261,7 @@ export function generateDashboardPdf(data: PdfData): { doc: jsPDF; sizeKb: numbe
       doc.setFont('helvetica', 'normal')
       doc.text(kpi.label, 24, y + 5.8)
 
-      const valStr = kpi.value !== null ? `${kpi.value}${kpi.unit ? ' ' + kpi.unit : ''}` : '—'
+      const valStr = kpi.value !== null ? `${kpi.value}${kpi.unit ? ' ' + kpi.unit : ''}` : '-'
       doc.text(valStr, 125, y + 5.8)
 
       doc.setTextColor(...sc)
@@ -373,7 +373,7 @@ export function generateDashboardPdf(data: PdfData): { doc: jsPDF; sizeKb: numbe
         doc.roundedRect(cX, y, cW, 8, 2, 2, 'F')
         doc.rect(cX, y + 5, cW, 3, 'F')
         doc.setTextColor(...WHITE); doc.setFontSize(7); doc.setFont('helvetica', 'bold')
-        doc.text('Groq AI  —  continued', cX + 8, y + 5.5)
+        doc.text('Groq AI - continued', cX + 8, y + 5.5)
         y += 8
       }
     }
@@ -570,5 +570,216 @@ export function generateHistoryPdf(data: HistoryPdfData): { doc: jsPDF; sizeKb: 
   const base64 = pdfOutput.split(',')[1]
   const sizeKb = Math.round((base64.length * 3) / 4 / 1024)
 
+  return { doc, sizeKb }
+}
+
+// ─── Wellness Journal PDF ────────────────────────────────────────────────────
+
+export interface WellnessPdfEntry {
+  date: string
+  userName: string
+  mood: number
+  moodLabel: string
+  energy: number
+  stress: number
+  sleepHours: number
+  sleepQuality: number
+  sleepQualityLabel: string
+  symptoms: string[]
+  exercised: boolean
+  exerciseType: string
+  exerciseMinutes: number
+  notes: string
+  analysis: string
+}
+
+const PMED:   [number, number, number] = [124, 58,  237]
+const PDARK:  [number, number, number] = [55,  10,  100]
+const PLIGHT: [number, number, number] = [249, 246, 255]
+const PSOFT:  [number, number, number] = [190, 160, 240]
+
+function mdMeasureHeight(doc: jsPDF, analysis: string, tW: number): number {
+  let h = 8
+  for (const raw of analysis.split('\n')) {
+    const t = raw.trim()
+    if (!t) { h += 3; continue }
+    if (/^#{1,3}\s/.test(t)) { h += 10; continue }
+    const isBullet = /^[-*+]\s/.test(t)
+    const stripped = t.replace(/^[-*+]\s/, '').replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal')
+    const wrapped = doc.splitTextToSize(stripped, isBullet ? tW - 6 : tW) as string[]
+    h += wrapped.length * 5 + 2
+  }
+  return h + 8
+}
+
+function mdDrawText(
+  doc: jsPDF,
+  analysis: string,
+  tX: number, startY: number, tW: number,
+  headingColor: [number, number, number],
+): void {
+  const lineH = 5
+  let y = startY
+
+  for (const raw of analysis.split('\n')) {
+    const t = raw.trim()
+    if (!t) { y += 3; continue }
+
+    if (/^#{1,3}\s/.test(t)) {
+      const level  = (t.match(/^(#{1,3})\s/)?.[1].length ?? 2)
+      const text   = t.replace(/^#+\s/, '').replace(/\*\*(.*?)\*\*/g, '$1')
+      doc.setTextColor(...headingColor)
+      doc.setFontSize(level === 3 ? 9 : 10)
+      doc.setFont('helvetica', 'bold')
+      doc.text(text, tX, y + 3.5)
+      doc.setDrawColor(...headingColor)
+      doc.setLineWidth(0.3)
+      doc.line(tX, y + 5.5, tX + tW, y + 5.5)
+      y += 10
+      continue
+    }
+
+    const isBullet = /^[-*+]\s/.test(t)
+    const stripped = t.replace(/^[-*+]\s/, '').replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1')
+    doc.setFontSize(8.5); doc.setFont('helvetica', 'normal')
+    const wrapped = doc.splitTextToSize(stripped, isBullet ? tW - 6 : tW) as string[]
+    doc.setTextColor(20, 10, 40)
+    if (isBullet) {
+      doc.setFillColor(...headingColor)
+      doc.circle(tX + 1.5, y + 2, 0.8, 'F')
+      wrapped.forEach((wl, wi) => doc.text(wl, tX + 5, y + 2 + wi * lineH))
+    } else {
+      wrapped.forEach((wl, wi) => doc.text(wl, tX, y + 2 + wi * lineH))
+    }
+    y += wrapped.length * lineH + 2
+  }
+}
+
+function drawMiniBar(
+  doc: jsPDF,
+  x: number, y: number, w: number,
+  val: number, max: number,
+  color: [number, number, number],
+) {
+  doc.setFillColor(220, 210, 228); doc.roundedRect(x, y, w, 2, 1, 1, 'F')
+  const fw = Math.max(0, Math.min(1, val / max)) * w
+  if (fw > 0) { doc.setFillColor(...color); doc.roundedRect(x, y, fw, 2, 1, 1, 'F') }
+}
+
+export function generateWellnessPdf(entry: WellnessPdfEntry): { doc: jsPDF; sizeKb: number } {
+  const doc = new jsPDF('p', 'mm', 'a4')
+  const W = 210
+
+  // ── Header ──────────────────────────────────────────────
+  doc.setFillColor(...DARK); doc.rect(0, 0, W, 44, 'F')
+  doc.setFillColor(...PINK); doc.rect(0, 44, W, 3, 'F')
+
+  doc.setTextColor(...WHITE); doc.setFontSize(20); doc.setFont('helvetica', 'bold')
+  doc.text('RoseGuard Monitor', 15, 17)
+
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(201, 184, 195)
+  doc.text('Wellness Journal', 15, 26)
+  if (entry.userName) doc.text(`Patient: ${ascii(entry.userName)}`, 15, 34)
+
+  const dateStr = new Date(entry.date).toLocaleDateString('en-GB', {
+    weekday: 'short', year: 'numeric', month: 'long', day: 'numeric',
+  })
+  doc.text(dateStr, W - 15, 34, { align: 'right' })
+
+  let y = 57
+
+  // ── Check-in Summary ────────────────────────────────────
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...GRAY)
+  doc.text('CHECK-IN SUMMARY', 15, y)
+  y += 5
+
+  const mCardW = 43; const mCardH = 23; const mGap = 3
+  const metricCards: Array<{ label: string; val: string; bar: number; max: number; color: [number,number,number] }> = [
+    { label: 'MOOD',   val: entry.moodLabel,               bar: entry.mood,         max: 5,  color: PINK },
+    { label: 'ENERGY', val: `${entry.energy}/10`,           bar: entry.energy,        max: 10, color: PINK },
+    { label: 'STRESS', val: `${entry.stress}/10`,           bar: entry.stress,        max: 10, color: [245, 158, 11] },
+    { label: 'SLEEP',  val: `${entry.sleepHours}h · ${entry.sleepQualityLabel}`, bar: entry.sleepQuality, max: 5, color: [59, 130, 246] },
+  ]
+
+  metricCards.forEach((card, i) => {
+    const cx = 15 + i * (mCardW + mGap)
+    doc.setFillColor(...LIGHT); doc.setDrawColor(252, 228, 236)
+    doc.roundedRect(cx, y, mCardW, mCardH, 3, 3, 'FD')
+    doc.setFillColor(...card.color); doc.roundedRect(cx, y, mCardW, 2, 1, 1, 'F')
+    doc.setTextColor(...GRAY); doc.setFontSize(5.5); doc.setFont('helvetica', 'bold')
+    doc.text(card.label, cx + 4, y + 7.5)
+    doc.setTextColor(...DARK); doc.setFontSize(8.5); doc.setFont('helvetica', 'bold')
+    doc.text(card.val, cx + 4, y + 15)
+    drawMiniBar(doc, cx + 4, y + 18.5, mCardW - 8, card.bar, card.max, card.color)
+  })
+
+  y += mCardH + 5
+
+  const dCardW = 57; const dCardH = 20; const dGap = 4.5
+  const details: Array<{ label: string; text: string }> = [
+    { label: 'SYMPTOMS', text: entry.symptoms.length ? entry.symptoms.join(', ') : 'None' },
+    { label: 'EXERCISE',  text: entry.exercised ? `${entry.exerciseType || 'Activity'} · ${entry.exerciseMinutes} min` : 'No exercise today' },
+    { label: 'NOTES',     text: entry.notes || 'None' },
+  ]
+
+  details.forEach((d, i) => {
+    const dx = 15 + i * (dCardW + dGap)
+    doc.setFillColor(...LIGHT); doc.setDrawColor(252, 228, 236)
+    doc.roundedRect(dx, y, dCardW, dCardH, 3, 3, 'FD')
+    doc.setTextColor(...GRAY); doc.setFontSize(5.5); doc.setFont('helvetica', 'bold')
+    doc.text(d.label, dx + 4, y + 6.5)
+    doc.setTextColor(...DARK); doc.setFontSize(7.5); doc.setFont('helvetica', 'normal')
+    const lines = doc.splitTextToSize(d.text.slice(0, 90) + (d.text.length > 90 ? '…' : ''), dCardW - 8) as string[]
+    doc.text(lines.slice(0, 2), dx + 4, y + 13)
+  })
+
+  y += dCardH + 10
+
+  // ── AI Wellness Analysis ─────────────────────────────────
+  doc.setFontSize(7.5); doc.setFont('helvetica', 'bold'); doc.setTextColor(...GRAY)
+  doc.text('AI WELLNESS ANALYSIS', 15, y)
+  y += 5
+
+  const cX = 15; const cW = 180; const tX = cX + 8; const tW = cW - 13
+
+  // Card header
+  const hH = 14
+  doc.setFillColor(...PDARK); doc.roundedRect(cX, y, cW, hH, 3, 3, 'F')
+  doc.rect(cX, y + hH - 3, cW, 3, 'F')
+
+  const sx = cX + 9; const sy = y + hH / 2
+  doc.setDrawColor(...PSOFT); doc.setLineWidth(0.65)
+  for (let a = 0; a < 4; a++) {
+    const angle = (a * Math.PI) / 4
+    doc.line(sx + Math.cos(angle) * 3.2, sy + Math.sin(angle) * 3.2, sx + Math.cos(angle + Math.PI) * 3.2, sy + Math.sin(angle + Math.PI) * 3.2)
+  }
+  doc.setFillColor(...WHITE); doc.circle(sx, sy, 1.1, 'F')
+
+  doc.setTextColor(...WHITE); doc.setFontSize(11); doc.setFont('helvetica', 'bold')
+  doc.text('Groq AI', cX + 17, y + 9.2)
+  doc.setTextColor(...PSOFT); doc.setFontSize(7.5); doc.setFont('helvetica', 'normal')
+  doc.text('Personalized Wellness Analysis', cX + 46, y + 9.2)
+  doc.setFillColor(...PMED); doc.roundedRect(cX + cW - 30, y + 4, 26, 6, 1.5, 1.5, 'F')
+  doc.setTextColor(...WHITE); doc.setFontSize(5.5); doc.setFont('helvetica', 'bold')
+  doc.text('WELLNESS INSIGHT', cX + cW - 17, y + 7.9, { align: 'center' })
+
+  y += hH
+
+  // Body: measure height → draw background → draw text
+  const bodyH = mdMeasureHeight(doc, entry.analysis, tW)
+  const pageBottom = 278
+  const availH = pageBottom - y
+  const actualBodyH = Math.min(bodyH, availH)
+
+  doc.setFillColor(...PLIGHT); doc.rect(cX, y, cW, actualBodyH, 'F')
+  doc.setFillColor(...PMED);   doc.rect(cX, y, 3,  actualBodyH, 'F')
+  mdDrawText(doc, entry.analysis, tX, y + 6, tW, PMED)
+
+  doc.setDrawColor(...PINK); doc.line(15, 283, W - 15, 283)
+
+  const pdfOutput = doc.output('datauristring')
+  const base64 = pdfOutput.split(',')[1]
+  const sizeKb = Math.round((base64.length * 3) / 4 / 1024)
   return { doc, sizeKb }
 }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
+import { playPop } from '@/composables/usePopSound'
 import LiveReadingCard from '@/components/LiveReadingCard.vue'
 import KpiCard from '@/components/KpiCard.vue'
 import { generateDashboardPdf } from '@/services/pdfGenerator'
@@ -75,7 +76,7 @@ async function toggleBle() {
 
 const bmiKpi = computed(() => {
   const b = userStore.bmi
-  if (b === null) return { value: '—', unit: '', status: 'unknown' as const }
+  if (b === null) return { value: '-', unit: '', status: 'unknown' as const }
   const status = b < 18.5 || b >= 30 ? 'critical' as const : b >= 25 ? 'warning' as const : 'normal' as const
   return { value: b.toFixed(1), unit: 'kg/m²', status }
 })
@@ -121,7 +122,7 @@ const lifestyleKpi = computed(() => {
 const weightKpi = computed(() => {
   const current = userStore.weightKg
   const target  = userStore.targetWeightKg
-  if (!current || !target) return { value: '—', unit: '', status: 'unknown' as const, description: 'Set target weight in profile' }
+  if (!current || !target) return { value: '-', unit: '', status: 'unknown' as const, description: 'Set target weight in profile' }
   const diff = Math.round((current - target) * 10) / 10
   if (Math.abs(diff) < 0.5) return { value: 'On target', unit: '', status: 'normal' as const, description: "You've reached your weight goal" }
   const abs = Math.abs(diff)
@@ -135,7 +136,7 @@ const weightKpi = computed(() => {
 
 const sleepKpi = computed(() => {
   const h = userStore.sleepHours
-  if (h === null) return { value: '—', status: 'unknown' as const }
+  if (h === null) return { value: '-', status: 'unknown' as const }
   if (h >= 7 && h <= 9) return { value: `${h}h`, status: 'normal'   as const }
   if (h >= 5 && h <= 10) return { value: `${h}h`, status: 'warning'  as const }
   return                        { value: `${h}h`, status: 'critical' as const }
@@ -149,7 +150,7 @@ const fitnessKpi = computed(() => {
     active:      { label: 'Active',      status: 'normal'  },
     very_active: { label: 'Very Active', status: 'normal'  },
   }
-  return map[userStore.fitnessLevel] ?? { label: '—', status: 'unknown' as any }
+  return map[userStore.fitnessLevel] ?? { label: '-', status: 'unknown' as any }
 })
 
 const smokingKpi = computed(() => {
@@ -159,7 +160,7 @@ const smokingKpi = computed(() => {
     occasional: { label: 'Occasional', status: 'warning'  },
     current:    { label: 'Current',    status: 'critical' },
   }
-  return map[userStore.smokingStatus] ?? { label: '—', status: 'unknown' as any }
+  return map[userStore.smokingStatus] ?? { label: '-', status: 'unknown' as any }
 })
 
 const medsKpi = computed(() => ({
@@ -178,8 +179,8 @@ const bmiTooltip = computed(() => {
 
 const cardioTooltip = computed(() => {
   const s = cardioKpi.value.status
-  if (s === 'critical') return 'Multiple risk factors detected — age, BMI, or smoking are significant contributors'
-  if (s === 'warning')  return 'Some risk factors present — consider reviewing lifestyle or consulting a doctor'
+  if (s === 'critical') return 'Multiple risk factors detected - age, BMI, or smoking are significant contributors'
+  if (s === 'warning')  return 'Some risk factors present - consider reviewing lifestyle or consulting a doctor'
   return                       'No significant risk factors detected based on your profile'
 })
 
@@ -214,7 +215,7 @@ const smokingTooltip = computed(() => {
 
 const weightTooltip = computed(() => {
   const s = weightKpi.value.status
-  if (s === 'warning') return 'You are more than 10 kg from your target — consider gradual adjustments'
+  if (s === 'warning') return 'You are more than 10 kg from your target - consider gradual adjustments'
   return undefined
 })
 
@@ -266,7 +267,7 @@ async function executePdfDownload(trends?: TrendSnapshot) {
 
   reportsStore.addReport({
     id: crypto.randomUUID(),
-    title: `Dashboard Report — ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    title: `Dashboard Report - ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
     generatedAt: now.toISOString(),
     sizeKb,
     pdfDataUrl: doc.output('datauristring'),
@@ -303,6 +304,7 @@ let hrInterval:   ReturnType<typeof setInterval> | null = null
 let tempInterval: ReturnType<typeof setInterval> | null = null
 
 function toggleSpo2() {
+  playPop()
   if (!spo2Measuring.value) {
     spo2Buffer.value = []
     spo2Labels.value = []
@@ -322,6 +324,7 @@ function toggleSpo2() {
 }
 
 function toggleHr() {
+  playPop()
   if (!hrMeasuring.value) {
     hrBuffer.value = []
     hrLabels.value = []
@@ -341,6 +344,7 @@ function toggleHr() {
 }
 
 function toggleTemp() {
+  playPop()
   if (!tempMeasuring.value) {
     tempBuffer.value = []
     tempLabels.value = []
@@ -360,6 +364,7 @@ function toggleTemp() {
 }
 
 function toggleAll() {
+  playPop()
   if (anyMeasuring.value) {
     if (spo2Measuring.value) toggleSpo2()
     if (hrMeasuring.value)   toggleHr()
@@ -484,8 +489,15 @@ const spo2Series = computed(() => [{ name: 'SpO2',        data: spo2Measuring.va
 const hrSeries   = computed(() => [{ name: 'Heart Rate',  data: hrMeasuring.value   ? hrBuffer.value   : trendsStore.hrValues   }])
 const tempSeries = computed(() => [{ name: 'Temperature', data: tempMeasuring.value ? tempBuffer.value : trendsStore.tempValues }])
 
-const formattedDate = computed(() =>
-  new Date().toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+const now = ref(new Date())
+const clockTimer = setInterval(() => { now.value = new Date() }, 1000)
+onUnmounted(() => clearInterval(clockTimer))
+
+const clockDate = computed(() =>
+  now.value.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+)
+const clockTime = computed(() =>
+  now.value.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
 )
 </script>
 
@@ -495,11 +507,19 @@ const formattedDate = computed(() =>
     <div class="page-header animate-section" style="--s-delay: 0s">
       <div>
         <h1>Dashboard</h1>
-        <p>{{ formattedDate }} &nbsp;·&nbsp; Last updated {{ lastUpdated }}</p>
+        <div class="clock-widget">
+          <span class="clock-date">{{ clockDate }}</span>
+          <span class="clock-sep">·</span>
+          <span class="clock-time">
+            <i class="pi pi-clock" />
+            {{ clockTime }}
+          </span>
+        </div>
       </div>
       <div class="header-actions">
         <button
           class="ble-btn"
+          data-tour="ble-btn"
           :class="{ connected: bioStore.bleConnected }"
           :disabled="bleConnecting"
           @click="toggleBle"
@@ -507,7 +527,7 @@ const formattedDate = computed(() =>
           <i :class="bleConnecting ? 'pi pi-spin pi-spinner' : bioStore.bleConnected ? 'pi pi-wifi' : 'pi pi-bluetooth'" />
           {{ bleConnecting ? 'Connecting…' : bioStore.bleConnected ? 'Disconnect' : 'Connect Device' }}
         </button>
-        <button class="pdf-btn" :disabled="downloadingPdf" @click="downloadPdf">
+        <button class="pdf-btn" data-tour="pdf-btn" :disabled="downloadingPdf" @click="downloadPdf">
           <i :class="downloadingPdf ? 'pi pi-spin pi-spinner' : 'pi pi-file-pdf'" />
           {{ downloadingPdf ? 'Generating…' : 'Download PDF' }}
         </button>
@@ -544,10 +564,10 @@ const formattedDate = computed(() =>
       <div v-if="showPositionTip" class="position-tip">
         <i class="pi pi-info-circle" />
         <span v-if="positionTipVariant === 'no-signal'">
-          Finger detected but no signal yet — try repositioning your finger on the sensor.
+          Finger detected but no signal yet - try repositioning your finger on the sensor.
         </span>
         <span v-else>
-          Reading looks off — try adjusting your finger position for a more accurate result.
+          Reading looks off - try adjusting your finger position for a more accurate result.
         </span>
       </div>
     </Transition>
@@ -574,6 +594,7 @@ const formattedDate = computed(() =>
     </div>
 
     <!-- Metric Trend Charts -->
+    <div data-tour="trends-section">
     <div class="section-title-row animate-section" style="margin-top: 32px; --s-delay: 0.85s">
       <p class="section-title" style="margin: 0">Metric Trends</p>
       <button class="measure-all-btn" :class="{ stopping: anyMeasuring }" @click="toggleAll">
@@ -641,6 +662,7 @@ const formattedDate = computed(() =>
       </div>
 
     </div>
+    </div>
 
     <Transition name="pdf-warn">
       <div v-if="showPdfWarning" class="pdf-warn-overlay">
@@ -648,7 +670,7 @@ const formattedDate = computed(() =>
           <h3>No trends recorded</h3>
           <p>
             You haven't started measuring any metrics yet. Use the "Start measuring" button on each chart first.
-            If you continue, the PDF will only contain your Health KPIs — no trend charts.
+            If you continue, the PDF will only contain your Health KPIs - no trend charts.
           </p>
           <div class="pdf-warn-actions">
             <button class="pdf-warn-back" @click="showPdfWarning = false">
@@ -669,6 +691,44 @@ const formattedDate = computed(() =>
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+}
+
+.clock-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 5px 12px 5px 10px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 99px;
+  font-size: 12.5px;
+  color: var(--color-text-secondary);
+  width: fit-content;
+}
+
+.clock-date {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.clock-sep {
+  opacity: 0.35;
+}
+
+.clock-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-primary);
+  letter-spacing: 0.02em;
+}
+
+.clock-time .pi {
+  font-size: 11px;
+  opacity: 0.75;
 }
 
 .header-actions {

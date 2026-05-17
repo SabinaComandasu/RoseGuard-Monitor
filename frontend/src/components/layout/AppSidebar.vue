@@ -17,15 +17,15 @@ const initials = computed(() => {
 })
 
 const navItems = [
-  { path: '/dashboard', label: 'Dashboard', icon: 'pi pi-th-large' },
-  { path: '/profile',   label: 'Profile',   icon: 'pi pi-user' },
-  { path: '/history',   label: 'AI Health',  icon: 'pi pi-sparkles' },
-  { path: '/reports',   label: 'Reports',   icon: 'pi pi-file-pdf' },
+  { path: '/dashboard', label: 'Dashboard', icon: 'pi pi-th-large', tourId: '' },
+  { path: '/journal',   label: 'Journal',   icon: 'pi pi-book',     tourId: 'nav-journal' },
+  { path: '/history',   label: 'AI Health', icon: 'pi pi-sparkles', tourId: 'nav-history' },
+  { path: '/reports',   label: 'Reports',   icon: 'pi pi-file-pdf', tourId: 'nav-reports' },
 ]
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ collapsed: !open }">
+  <aside class="sidebar" :class="{ collapsed: !open }" data-tour="sidebar">
     <div class="sidebar-logo" v-if="open">
       <img src="@/assets/logo.png" alt="RoseGuard Monitor" class="logo-full" />
     </div>
@@ -39,6 +39,7 @@ const navItems = [
         class="nav-item"
         :class="{ active: route.path === item.path }"
         :title="!open ? item.label : ''"
+        v-bind="item.tourId ? { 'data-tour': item.tourId } : {}"
       >
         <i :class="item.icon" class="nav-icon" />
         <span class="nav-label">{{ item.label }}</span>
@@ -46,7 +47,7 @@ const navItems = [
     </nav>
 
     <!-- User profile footer -->
-    <RouterLink to="/profile" class="user-footer" :class="{ collapsed: !open }" :title="!open ? (auth.user?.firstName ?? 'Profile') : ''">
+    <RouterLink to="/profile" class="user-footer" data-tour="user-footer" :class="{ collapsed: !open }" :title="!open ? (auth.user?.firstName ?? 'Profile') : ''">
       <div class="user-avatar">
         <img v-if="user.avatarUrl" :src="user.avatarUrl" class="avatar-img" alt="avatar" />
         <span v-else class="avatar-initials">{{ initials }}</span>

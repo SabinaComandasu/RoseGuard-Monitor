@@ -88,17 +88,17 @@ const initials = computed(() => {
           </div>
           <div class="quick-stats">
             <div class="quick-stat">
-              <span class="qs-value">{{ user.heightCm ?? '—' }}</span>
+              <span class="qs-value">{{ user.heightCm ?? '-' }}</span>
               <span class="qs-label">cm</span>
             </div>
             <div class="qs-divider" />
             <div class="quick-stat">
-              <span class="qs-value">{{ user.weightKg ?? '—' }}</span>
+              <span class="qs-value">{{ user.weightKg ?? '-' }}</span>
               <span class="qs-label">kg</span>
             </div>
             <div class="qs-divider" />
             <div class="quick-stat">
-              <span class="qs-value" :class="bmiLabel?.cls">{{ user.bmi ?? '—' }}</span>
+              <span class="qs-value" :class="bmiLabel?.cls">{{ user.bmi ?? '-' }}</span>
               <span class="qs-label">BMI</span>
             </div>
           </div>
@@ -197,7 +197,7 @@ const initials = computed(() => {
           <div class="field">
             <label>BMI <span class="optional">(calculated)</span></label>
             <div class="bmi-display" :class="bmiLabel?.cls ?? 'unknown'">
-              <span class="bmi-value">{{ user.bmi ?? '—' }}</span>
+              <span class="bmi-value">{{ user.bmi ?? '-' }}</span>
               <span v-if="bmiLabel" class="status-badge" :class="bmiLabel.cls">{{ bmiLabel.text }}</span>
             </div>
           </div>

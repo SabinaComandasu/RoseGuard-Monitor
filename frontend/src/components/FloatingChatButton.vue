@@ -3,7 +3,7 @@ defineEmits<{ toggle: [] }>()
 </script>
 
 <template>
-  <button class="fab" title="AI Assistant" @click="$emit('toggle')">
+  <button class="fab" title="AI Assistant" data-tour="fab" @click="$emit('toggle')">
     <i class="pi pi-comments fab-icon" />
     <span class="fab-pulse" />
   </button>

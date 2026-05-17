@@ -175,7 +175,7 @@ async function executePdfDownload() {
 
   reportsStore.addReport({
     id: crypto.randomUUID(),
-    title: `Trends Report — ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
+    title: `Trends Report - ${now.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}`,
     generatedAt: now.toISOString(),
     sizeKb,
     pdfDataUrl: doc.output('datauristring'),
@@ -420,7 +420,7 @@ onMounted(() => {
           </div>
           <div v-else class="chart-empty">
             <i class="pi pi-chart-line" />
-            <span>No {{ m.label }} data — start measuring on the Dashboard</span>
+            <span>No {{ m.label }} data - start measuring on the Dashboard</span>
           </div>
 
         </div>

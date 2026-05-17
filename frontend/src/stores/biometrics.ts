@@ -60,21 +60,22 @@ export const useBiometricsStore = defineStore('biometrics', () => {
     lastUpdated.value    = new Date().toLocaleTimeString()
 
     if (!data.fingerDetected) {
-      hrEma = spo2Ema = tempEma = null
-      heartRate.value = spo2.value = temperature.value = null
+      hrEma = spo2Ema = null
+      heartRate.value = spo2.value = null
     } else {
       if (data.heartRate !== null) {
-        hrEma       = ema(hrEma, data.heartRate, HR_ALPHA)
+        hrEma           = ema(hrEma, data.heartRate, HR_ALPHA)
         heartRate.value = hysteresisRound(hrEma, heartRate.value)
       }
       if (data.spo2 !== null) {
-        spo2Ema     = ema(spo2Ema, data.spo2, SPO2_ALPHA)
-        spo2.value  = Math.max(95, hysteresisRound(spo2Ema, spo2.value))
+        spo2Ema    = ema(spo2Ema, data.spo2, SPO2_ALPHA)
+        spo2.value = hysteresisRound(spo2Ema, spo2.value)
       }
-      if (data.temperature !== null) {
-        tempEma          = ema(tempEma, data.temperature, TEMP_ALPHA)
-        temperature.value = Math.round(tempEma * 10) / 10
-      }
+    }
+
+    if (data.temperature !== null) {
+      tempEma           = ema(tempEma, data.temperature, TEMP_ALPHA)
+      temperature.value = Math.round(tempEma * 10) / 10
     }
 
     history.value.push({

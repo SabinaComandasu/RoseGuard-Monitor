@@ -32,7 +32,7 @@ const statusLabel: Record<HealthStatus, string> = {
     </div>
 
     <div class="kpi-value-row">
-      <span class="kpi-value">{{ value ?? '—' }}</span>
+      <span class="kpi-value">{{ value ?? '-' }}</span>
       <span v-if="unit && value !== null" class="kpi-unit">{{ unit }}</span>
     </div>
 

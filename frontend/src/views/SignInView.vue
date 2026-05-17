@@ -104,7 +104,7 @@ function triggerShake() {
           <div class="left-hero animate-fade-up" style="animation-delay: 0.1s">
           <h2>Monitor your health,<br />live better every day.</h2>
           <p>
-            Real-time biometric data from your wearable sensor —
+            Real-time biometric data from your wearable sensor -
             SpO2, heart rate, and temperature, all in one place.
           </p>
         </div>
