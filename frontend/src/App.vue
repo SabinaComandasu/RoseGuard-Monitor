@@ -13,6 +13,7 @@ import { useBiometricsStore } from './stores/biometrics'
 import { useTrendsStore } from './stores/trends'
 import { useHealthAdviceStore } from './stores/healthAdvice'
 import type { WelcomeChanges } from './components/WelcomeBackDialog.vue'
+import { speakPrompt } from './composables/useVoicePrompt'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,12 +23,22 @@ const bio  = useBiometricsStore()
 const trends = useTrendsStore()
 const healthAdvice = useHealthAdviceStore()
 const healthAdviceNotif = ref(false)
+const deviceReminderNotif = ref(false)
 const chatOpen = ref(false)
 const sidebarOpen = ref(true)
 const shellEntering = ref(false)
 const showWelcome = ref(false)
 const showProfileGate = ref(false)
 const showTour = ref(false)
+
+const DEVICE_REMINDER_TEXT = 'Please connect your device to start gathering data.'
+
+function promptConnectDevice() {
+  if (bio.bleConnected) return
+  speakPrompt(DEVICE_REMINDER_TEXT)
+  deviceReminderNotif.value = true
+  playPop()
+}
 
 onMounted(async () => {
   if (!auth.isAuthenticated) return
@@ -60,7 +71,11 @@ watch(() => auth.justLoggedIn, async (val) => {
 
 function closeWelcome(changes: WelcomeChanges | null, wantsTour: boolean) {
   showWelcome.value = false
-  if (wantsTour) showTour.value = true
+  if (wantsTour) {
+    showTour.value = true
+  } else {
+    promptConnectDevice()
+  }
   if (!changes) return
   healthAdvice.evaluate(user.bmi, user.sleepHours, user.fitnessLevel, changes)
   if (healthAdvice.hasAny) {
@@ -71,6 +86,7 @@ function closeWelcome(changes: WelcomeChanges | null, wantsTour: boolean) {
 
 function onProfileSaved() {
   showProfileGate.value = false
+  promptConnectDevice()
 }
 
 function logout() {
@@ -106,6 +122,7 @@ function onChatToggle() {
     trends.markHealthNotifSeen()
     healthAdviceNotif.value = false
     healthAdvice.markSeen()
+    deviceReminderNotif.value = false
   }
 }
 </script>
@@ -142,7 +159,15 @@ function onChatToggle() {
 
     <!-- Notification dot on FAB -->
     <Transition name="notif">
-      <span v-if="(trends.hasChartData && !trends.healthNotifSeen) || healthAdviceNotif" class="fab-notif-dot" />
+      <span v-if="(trends.hasChartData && !trends.healthNotifSeen) || healthAdviceNotif || deviceReminderNotif" class="fab-notif-dot" />
+    </Transition>
+
+    <!-- Device connection reminder bubble -->
+    <Transition name="notif">
+      <div v-if="deviceReminderNotif" class="fab-notif-bubble health-notif-bubble" style="font-weight:700">
+        <i class="pi pi-bluetooth" style="color:#7c3aed;font-size:12px" />
+        {{ DEVICE_REMINDER_TEXT }}
+      </div>
     </Transition>
 
     <!-- Health advice notification bubble (higher) -->

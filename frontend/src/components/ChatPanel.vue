@@ -241,7 +241,7 @@ function onRenameKeydown(e: KeyboardEvent, id: string) {
             <div class="avatar"><i class="pi pi-sparkles" /></div>
             <div>
               <div class="header-title">AI Assistant</div>
-              <div class="header-sub">Powered by Grok</div>
+              <div class="header-sub">Powered by Groq</div>
             </div>
           </div>
           <div class="header-actions">

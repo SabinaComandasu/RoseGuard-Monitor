@@ -840,6 +840,7 @@ function downloadEntryPdf(entry: JournalEntry) {
   border-radius: var(--radius-md, 12px);
   overflow: hidden;
   box-shadow: 0 4px 24px rgba(233,30,140,0.1);
+  flex-shrink: 0;
 }
 
 .analysis-head {
